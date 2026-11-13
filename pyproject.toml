@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:cudaq-logical is in preview:UserWarning",
+    "ignore:The CUDA-Q `sample` and `observe`:FutureWarning",
+]
