@@ -1,15 +1,17 @@
 """Publication-quality plots for the benchmark and VQE results.
 
-Plots are built only from the CSV files the experiments write, so they can be
-regenerated at any time without re-running a simulation::
+Plots are built only from the CSV/JSON files the experiments write, so they
+can be regenerated at any time without re-running a simulation::
 
     python -m src.plotting ghz results/ghz_benchmark.csv results/ghz_benchmark_cpu_n24.csv
+    python -m src.plotting vqe --outdir results
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, Optional
@@ -149,6 +151,107 @@ def plot_ghz_results(csv_paths: Iterable[Path], out_dir: Path) -> list[Path]:
 
 
 # --------------------------------------------------------------------------- #
+# VQE plots
+# --------------------------------------------------------------------------- #
+CHEMICAL_ACCURACY_MHA = 1.6
+FCI_COLOR = "#222222"
+HF_COLOR = "#C44E52"
+
+
+def _read_csv(path: Path) -> list[dict]:
+    with Path(path).open(newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
+def plot_vqe_convergence(csv_path: Path, summary: dict, out_path: Path) -> Path:
+    """Energy and error vs optimizer evaluation at the reference bond length."""
+    rows = _read_csv(csv_path)
+    it = [int(r["evaluation"]) for r in rows]
+    e = [float(r["energy_Ha"]) for r in rows]
+    err = [max(float(r["abs_error_mHa"]), 1e-12) for r in rows]
+    e_fci = summary["convergence_E_fci_Ha"]
+
+    with plt.rc_context(STYLE):
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.0, 6.0), sharex=True,
+                                       gridspec_kw={"height_ratios": [1.3, 1]})
+        ax1.plot(it, e, color=NVIDIA_GREEN, lw=1.8, marker="o", ms=3, label="VQE energy")
+        ax1.axhline(e_fci, color=FCI_COLOR, ls="--", lw=1.2, label=f"FCI ({e_fci:.6f} Ha)")
+        ax1.axhline(summary["convergence_E_hf_Ha"], color=HF_COLOR, ls=":", lw=1.2,
+                    label=f"Hartree-Fock ({summary['convergence_E_hf_Ha']:.6f} Ha)")
+        ax1.set_ylabel("Energy [Ha]")
+        ax1.set_title(f"UCCSD-VQE convergence for H$_2$ at R = {summary['convergence_R_angstrom']} Å")
+        ax1.legend(fontsize=9)
+
+        ax2.semilogy(it, err, color=NVIDIA_GREEN, lw=1.8)
+        ax2.axhspan(min(err) / 10, CHEMICAL_ACCURACY_MHA, color=NVIDIA_GREEN, alpha=0.12,
+                    label="chemical accuracy (< 1.6 mHa)")
+        ax2.axhline(CHEMICAL_ACCURACY_MHA, color=NVIDIA_GREEN, lw=1, ls=":")
+        ax2.set_ylim(min(err) / 10, max(err) * 3)
+        ax2.set_xlabel("Optimizer evaluation")
+        ax2.set_ylabel("|E − E$_{FCI}$| [mHa]")
+        ax2.legend(fontsize=9, loc="upper right")
+        fig.savefig(out_path)
+        plt.close(fig)
+    return out_path
+
+
+def plot_h2_pes(rows: list[dict], summary: dict, out_path: Path) -> Path:
+    """Potential energy curve: VQE points, FCI line, HF dashed, dissociation limit."""
+    r = [float(x["R"]) for x in rows]
+    with plt.rc_context(STYLE):
+        fig, ax = plt.subplots(figsize=(7.0, 4.6))
+        ax.plot(r, [float(x["E_fci"]) for x in rows], color=FCI_COLOR, lw=1.6, label="FCI (exact, PySCF)")
+        ax.plot(r, [float(x["E_hf"]) for x in rows], color=HF_COLOR, lw=1.4, ls="--", label="Hartree-Fock")
+        ax.plot(r, [float(x["E_vqe"]) for x in rows], ls="none", marker="o", ms=5, mfc="white",
+                mec=NVIDIA_GREEN, mew=1.6, label="VQE (UCCSD, CUDA-Q)")
+        limit = summary["dissociation_limit_2E_H_Ha"]
+        ax.axhline(limit, color="0.45", lw=1, ls=":", label=f"2 × E(H atom) = {limit:.4f} Ha")
+        ax.plot(summary["R_eq_angstrom"], summary["E_min_vqe_Ha"], marker="*", ms=13, color=NVIDIA_GREEN,
+                mec="black", mew=0.6, ls="none",
+                label=f"VQE minimum: {summary['R_eq_angstrom']:.3f} Å, {summary['E_min_vqe_Ha']:.4f} Ha")
+        ax.set_xlabel("H–H bond length R [Å]")
+        ax.set_ylabel("Energy [Ha]")
+        ax.set_title("H$_2$ potential energy curve (STO-3G)")
+        ax.legend(fontsize=9, loc="upper right")
+        fig.savefig(out_path)
+        plt.close(fig)
+    return out_path
+
+
+def plot_h2_error(rows: list[dict], out_path: Path) -> Path:
+    """|E_vqe − E_fci| in mHa vs R on a log axis, with the chemical-accuracy band."""
+    r = [float(x["R"]) for x in rows]
+    err = [max(float(x["abs_error_mHa"]), 1e-12) for x in rows]
+    bottom = min(err) / 10
+    with plt.rc_context(STYLE):
+        fig, ax = plt.subplots(figsize=(7.0, 4.2))
+        ax.axhspan(bottom, CHEMICAL_ACCURACY_MHA, color=NVIDIA_GREEN, alpha=0.12, label="chemical accuracy")
+        ax.axhline(CHEMICAL_ACCURACY_MHA, color=NVIDIA_GREEN, lw=1, ls=":")
+        ax.semilogy(r, err, marker="o", ms=4, lw=1.4, color=NVIDIA_GREEN, label="|E$_{VQE}$ − E$_{FCI}$|")
+        ax.set_ylim(bottom, CHEMICAL_ACCURACY_MHA * 20)
+        ax.text(r[0], CHEMICAL_ACCURACY_MHA * 1.4, "1.6 mHa", fontsize=9, color=NVIDIA_GREEN)
+        ax.set_xlabel("H–H bond length R [Å]")
+        ax.set_ylabel("|E$_{VQE}$ − E$_{FCI}$| [mHa]")
+        ax.set_title(f"VQE error along the curve (max {max(err):.1e} mHa)")
+        ax.legend(fontsize=9, loc="upper right")
+        fig.savefig(out_path)
+        plt.close(fig)
+    return out_path
+
+
+def plot_vqe_results(out_dir: Path) -> list[Path]:
+    """Write vqe_convergence.png, h2_pes.png and h2_error.png from the result files."""
+    out_dir = Path(out_dir)
+    summary = json.loads((out_dir / "h2_summary.json").read_text())
+    rows = _read_csv(out_dir / "h2_pes.csv")
+    return [
+        plot_vqe_convergence(out_dir / "vqe_convergence.csv", summary, out_dir / "vqe_convergence.png"),
+        plot_h2_pes(rows, summary, out_dir / "h2_pes.png"),
+        plot_h2_error(rows, out_dir / "h2_error.png"),
+    ]
+
+
+# --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
 def main(argv: Optional[list[str]] = None) -> None:
@@ -157,11 +260,13 @@ def main(argv: Optional[list[str]] = None) -> None:
     ghz_parser = sub.add_parser("ghz", help="GHZ benchmark plots")
     ghz_parser.add_argument("csv", nargs="+", type=Path)
     ghz_parser.add_argument("--outdir", type=Path, default=Path("results"))
+    vqe_parser = sub.add_parser("vqe", help="H2 VQE plots")
+    vqe_parser.add_argument("--outdir", type=Path, default=Path("results"))
     args = parser.parse_args(argv)
 
-    if args.kind == "ghz":
-        for path in plot_ghz_results(args.csv, args.outdir):
-            print(f"Plot written to {path}")
+    paths = plot_ghz_results(args.csv, args.outdir) if args.kind == "ghz" else plot_vqe_results(args.outdir)
+    for path in paths:
+        print(f"Plot written to {path}")
 
 
 if __name__ == "__main__":
