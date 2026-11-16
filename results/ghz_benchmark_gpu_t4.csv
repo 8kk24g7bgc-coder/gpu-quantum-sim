@@ -1,0 +1,12 @@
+target,n,median_s,std_s,est_mem_gb,precision,device,device_name,host,shots,repeats,status
+nvidia,20,0.0022739,0.000127126,0.0078125,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,21,0.00366032,0.000124724,0.015625,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,22,0.00451097,0.000320805,0.03125,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,23,0.00750926,2.65491e-05,0.0625,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,24,0.0141247,4.18274e-05,0.125,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,25,0.02412,0.00160165,0.25,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,26,0.0492246,0.000211979,0.5,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,27,0.102818,9.83145e-05,1,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,28,0.204088,0.000149461,2,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,29,0.423068,0.000241598,4,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok
+nvidia,30,0.885045,0.000525434,8,fp32,gpu,Tesla T4,4b530da8608c,1000,5,ok

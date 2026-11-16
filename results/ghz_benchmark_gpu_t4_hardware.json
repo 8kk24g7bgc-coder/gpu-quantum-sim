@@ -1,0 +1,19 @@
+{
+  "hostname": "4b530da8608c",
+  "cpu_model": "Intel(R) Xeon(R) CPU @ 2.00GHz",
+  "physical_cores": 1,
+  "logical_cores": 2,
+  "omp_num_threads": null,
+  "ram_total_gb": 12.67,
+  "ram_available_gb": 11.24,
+  "gpus": [
+    {
+      "name": "Tesla T4",
+      "total_bytes": 16106127360,
+      "free_bytes": 15634268160
+    }
+  ],
+  "cudaq_gpu_count": 1,
+  "cudaq_version": "CUDA-Q Version 0.16.0 (https://github.com/NVIDIA/cuda-quantum 62fce8b862302158e0119c65e3ce57538f3af048)",
+  "git_commit": "68eec70"
+}
