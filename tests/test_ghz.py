@@ -31,3 +31,16 @@ def test_validator_rejects_wrong_bitstrings():
 def test_validator_rejects_unbalanced_counts():
     assert not ghz_counts_are_valid({"000": 900, "111": 100}, 3)
     assert ghz_counts_are_valid({"000": 510, "111": 490}, 3)
+
+
+def test_free_memory_is_measured_once_per_target(monkeypatch, tmp_path):
+    """Re-measuring inside the loop would count the simulator's own cache as used."""
+    import src.ghz_benchmark as gb
+
+    calls = []
+    monkeypatch.setattr(gb, "_available_bytes", lambda spec: calls.append(1) or 64 * 1024**3)
+    monkeypatch.setattr(gb, "time_sample", lambda n, shots, warmup, repeats: [0.01] * repeats)
+    writer = gb.ResultWriter(tmp_path / "ghz.csv")
+    gb.benchmark_target(TARGETS["qpp-cpu"], [10, 11, 12], 10, 0, 2, 2.0, "host", "cpu", None, writer)
+    writer.close()
+    assert len(calls) == 1

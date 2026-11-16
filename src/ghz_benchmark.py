@@ -192,6 +192,14 @@ def benchmark_target(
 ) -> None:
     """Benchmark one target over ``qubit_counts`` and stream rows to ``writer``."""
     device_name = _device_name(spec, cpu_model)
+    # Measure free memory once, before any large simulation. Simulators keep
+    # freed buffers in a per-process pool (cuStateVec/CUDA does this on the
+    # GPU), so re-measuring inside the loop would count our own reusable cache
+    # as "used" and wrongly skip sizes that fit (seen on a T4: 14.6 GiB free at
+    # start, 10.4 GiB reported after n = 29).
+    available = _available_bytes(spec)
+    if available is not None:
+        print(f"  free {spec.device.upper()} memory at start: {available / 1024**3:.1f} GiB")
     started = time.perf_counter()
     last_median: Optional[float] = None
 
@@ -211,7 +219,6 @@ def benchmark_target(
             "status": "ok",
         }
 
-        available = _available_bytes(spec)
         if available is not None and not fits_in_memory(n, spec.precision, available, headroom):
             row["status"] = "skipped_memory"
             print(
