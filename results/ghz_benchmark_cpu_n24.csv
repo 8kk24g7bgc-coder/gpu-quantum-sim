@@ -1,0 +1,13 @@
+target,n,median_s,std_s,est_mem_gb,precision,device,device_name,host,shots,repeats,status
+qpp-cpu,20,0.607575,0.0127876,0.015625,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,21,1.35537,0.00370865,0.03125,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,22,2.9483,0.00709426,0.0625,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,23,6.3978,0.0158474,0.125,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,24,14.4278,0.230352,0.25,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,25,31.353,0.0820469,0.5,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,26,67.7478,0.182919,1,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,27,146.056,0.162347,2,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,28,314.569,0.665488,4,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,29,675.96,1.50255,8,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,30,1440.92,2.68684,16,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok
+qpp-cpu,31,3074.2,4.93262,32,fp64,cpu,Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz,n24,1000,5,ok

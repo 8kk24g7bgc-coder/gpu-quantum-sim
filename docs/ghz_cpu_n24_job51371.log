@@ -1,0 +1,32 @@
+job=51371  host=n24  start=2026-11-13 15:05:07
+/var/spool/slurmd/job51371/slurm_script: line 95: git: command not found
+OMP_NUM_THREADS=8  git=
+Hardware: {
+  "hostname": "n24",
+  "cpu_model": "Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz",
+  "physical_cores": 8,
+  "logical_cores": 16,
+  "omp_num_threads": "8",
+  "ram_total_gb": 125.18,
+  "ram_available_gb": 123.24,
+  "gpus": [],
+  "cudaq_gpu_count": 0,
+  "cudaq_version": "CUDA-Q Version 0.16.0 (https://github.com/NVIDIA/cuda-quantum 62fce8b862302158e0119c65e3ce57538f3af048)"
+}
+
+[qpp-cpu] precision=fp64  shots=1000  warmup=1  repeats=5
+  correctness check GHZ(8): {'00000000': 1980, '11111111': 2020}  -> OK
+  [qpp-cpu] n=20  median    0.6076 s  std   0.0128 s  state 0.015625 GiB
+  [qpp-cpu] n=21  median    1.3554 s  std   0.0037 s  state 0.03125 GiB
+  [qpp-cpu] n=22  median    2.9483 s  std   0.0071 s  state 0.0625 GiB
+  [qpp-cpu] n=23  median    6.3978 s  std   0.0158 s  state 0.125 GiB
+  [qpp-cpu] n=24  median   14.4278 s  std   0.2304 s  state 0.25 GiB
+  [qpp-cpu] n=25  median   31.3530 s  std   0.0820 s  state 0.5 GiB
+  [qpp-cpu] n=26  median   67.7478 s  std   0.1829 s  state 1 GiB
+  [qpp-cpu] n=27  median  146.0561 s  std   0.1623 s  state 2 GiB
+  [qpp-cpu] n=28  median  314.5687 s  std   0.6655 s  state 4 GiB
+  [qpp-cpu] n=29  median  675.9601 s  std   1.5026 s  state 8 GiB
+  [qpp-cpu] n=30  median 1440.9166 s  std   2.6868 s  state 16 GiB
+  [qpp-cpu] n=31  median 3074.1960 s  std   4.9326 s  state 32 GiB
+/var/spool/slurmd/job51371/slurm_script: line 103: 13269 Killed                  python -u -m src.ghz_benchmark --targets qpp-cpu --min-qubits 20 --max-qubits 32 --output ${REPO}/results/ghz_benchmark_cpu_n24.csv --no-plot
+end=2026-11-14 00:47:04  exit_code=137
