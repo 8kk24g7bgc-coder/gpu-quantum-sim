@@ -121,11 +121,17 @@ def check_ghz_correctness(n: int = 8, shots: int = 4000, tolerance: float = 0.05
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class TargetSpec:
-    """A CUDA-Q simulation target and how it stores amplitudes."""
+    """A CUDA-Q simulation target and how it stores amplitudes.
+
+    ``headroom`` is the peak memory of a run divided by the bare statevector
+    size; a qubit count is skipped when ``state_size * headroom`` exceeds the
+    free memory.
+    """
 
     name: str
     precision: str
     device: str  # "cpu" or "gpu"
+    headroom: float
     options: dict = field(default_factory=dict)
 
     def activate(self) -> None:
@@ -134,10 +140,13 @@ class TargetSpec:
 
 
 TARGETS: dict[str, TargetSpec] = {
-    # Single-node CPU simulator (Q++), always double precision.
-    "qpp-cpu": TargetSpec("qpp-cpu", "fp64", "cpu"),
+    # Single-node CPU simulator (Q++), always double precision. Headroom 2.0 is
+    # measured, not guessed: on a node with 123 GiB free, n = 31 (32 GiB state)
+    # ran but n = 32 (64 GiB state) was killed by the OOM killer, so the peak
+    # usage is between 1.9x and 2x the statevector (Slurm job 51371).
+    "qpp-cpu": TargetSpec("qpp-cpu", "fp64", "cpu", headroom=2.0),
     # cuStateVec on one GPU; fp32 is the default, set explicitly for clarity.
-    "nvidia": TargetSpec("nvidia", "fp32", "gpu", {"option": "fp32"}),
+    "nvidia": TargetSpec("nvidia", "fp32", "gpu", headroom=1.5, options={"option": "fp32"}),
 }
 
 
@@ -275,8 +284,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--shots", type=int, default=1000, help="shots per cudaq.sample call")
     parser.add_argument("--warmup", type=int, default=1, help="untimed runs per size")
     parser.add_argument("--repeats", type=int, default=5, help="timed runs per size")
-    parser.add_argument("--headroom", type=float, default=1.5,
-                        help="skip n if state size x headroom exceeds free memory")
+    parser.add_argument("--headroom", type=float, default=None,
+                        help="override the per-target memory headroom "
+                             "(skip n if state size x headroom exceeds free memory)")
     parser.add_argument("--time-budget", type=float, default=None,
                         help="optional seconds per target; skip sizes projected to exceed it")
     parser.add_argument("--output", type=Path, default=Path("results/ghz_benchmark.csv"))
@@ -318,14 +328,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                 print(f"\n[{name}] No NVIDIA GPU available: skipping the GPU benchmark.")
                 continue
 
+            headroom = args.headroom if args.headroom is not None else spec.headroom
             print(f"\n[{name}] precision={spec.precision}  shots={args.shots}  "
-                  f"warmup={args.warmup}  repeats={args.repeats}")
+                  f"warmup={args.warmup}  repeats={args.repeats}  headroom={headroom}")
             spec.activate()
             counts = check_ghz_correctness()
             print(f"  correctness check GHZ(8): {counts}  -> OK")
 
             benchmark_target(spec, qubit_counts, args.shots, args.warmup, args.repeats,
-                             args.headroom, hw.hostname, hw.cpu_model, args.time_budget, writer)
+                             headroom, hw.hostname, hw.cpu_model, args.time_budget, writer)
             ran_any = True
     finally:
         writer.close()

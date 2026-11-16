@@ -304,6 +304,29 @@ def physical_core_count() -> int:
     return len(cores) or (os.cpu_count() or 1)
 
 
+def git_commit(repo_root: Optional[Path] = None) -> Optional[str]:
+    """Short hash of the checked-out commit, read straight from ``.git``.
+
+    Works on compute nodes where the ``git`` command is not installed.
+    Returns ``None`` outside a git checkout.
+    """
+    root = repo_root or Path(__file__).resolve().parent.parent
+    git_dir = root / ".git"
+    head = _read_text(git_dir / "HEAD")
+    if not head:
+        return None
+    if not head.startswith("ref:"):
+        return head[:7]  # detached HEAD holds the hash itself
+    ref = head.split(":", 1)[1].strip()
+    sha = _read_text(git_dir / ref)
+    if sha is None:  # ref may live in packed-refs after `git gc`
+        for line in (_read_text(git_dir / "packed-refs") or "").splitlines():
+            if line.endswith(" " + ref):
+                sha = line.split()[0]
+                break
+    return sha[:7] if sha else None
+
+
 @dataclass
 class HardwareInfo:
     """Snapshot of the machine a benchmark ran on."""
@@ -318,6 +341,7 @@ class HardwareInfo:
     gpus: list[dict] = field(default_factory=list)
     cudaq_gpu_count: int = 0
     cudaq_version: Optional[str] = None
+    git_commit: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -352,6 +376,7 @@ def collect_hardware_info(include_cudaq: bool = True) -> HardwareInfo:
         gpus=[asdict(g) for g in query_gpus()],
         cudaq_gpu_count=n_gpu,
         cudaq_version=version,
+        git_commit=git_commit(),
     )
 
 
@@ -361,7 +386,8 @@ def main() -> None:
     print(json.dumps(info.to_dict(), indent=2))
 
     ram = available_host_memory_bytes()
-    print(f"\nMax qubits on CPU (fp64, headroom 1.5): {max_qubits_that_fit('fp64', ram)}")
+    # qpp-cpu peaks at ~2x the statevector (measured, see src/ghz_benchmark.py)
+    print(f"\nMax qubits on CPU (fp64, headroom 2.0): {max_qubits_that_fit('fp64', ram, 2.0)}")
     vram = available_gpu_memory_bytes()
     if vram is not None:
         print(f"Max qubits on GPU (fp32, headroom 1.5): {max_qubits_that_fit('fp32', vram)}")

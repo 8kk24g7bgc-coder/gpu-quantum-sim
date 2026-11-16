@@ -92,7 +92,7 @@ export OMP_PROC_BIND=close
 
 {
   echo "job=${SLURM_JOB_ID}  host=$(hostname)  start=$(date '+%F %T')"
-  echo "OMP_NUM_THREADS=${OMP_NUM_THREADS}  git=$(git -C ${REPO} rev-parse --short HEAD)"
+  echo "OMP_NUM_THREADS=${OMP_NUM_THREADS}  (git commit: see \"git_commit\" in the hardware block)"
   python -u -m src.ghz_benchmark \
       --targets qpp-cpu \
       --min-qubits 20 --max-qubits 32 \

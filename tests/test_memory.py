@@ -53,6 +53,15 @@ def test_max_qubits_that_fit():
     assert max_qubits_that_fit("fp64", 92 * GIB) == 31
 
 
+def test_cpu_headroom_reproduces_measured_oom_limit():
+    """Job 51371 on n24 (123 GiB free): n = 31 ran, n = 32 was OOM-killed."""
+    from src.ghz_benchmark import TARGETS
+
+    headroom = TARGETS["qpp-cpu"].headroom
+    assert fits_in_memory(31, "fp64", 123 * GIB, headroom)
+    assert not fits_in_memory(32, "fp64", 123 * GIB, headroom)
+
+
 @pytest.mark.parametrize(
     "call",
     [
