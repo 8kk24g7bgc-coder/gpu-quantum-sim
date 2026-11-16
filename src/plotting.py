@@ -3,7 +3,7 @@
 Plots are built only from the CSV/JSON files the experiments write, so they
 can be regenerated at any time without re-running a simulation::
 
-    python -m src.plotting ghz results/ghz_benchmark.csv results/ghz_benchmark_cpu_n24.csv
+    python -m src.plotting ghz --merge-to results/ghz_benchmark.csv   # all ghz_benchmark_*.csv
     python -m src.plotting vqe --outdir results
 """
 
@@ -52,6 +52,25 @@ def load_ghz_rows(paths: Iterable[Path]) -> list[dict]:
         with Path(path).open(newline="") as fh:
             rows.extend(csv.DictReader(fh))
     return rows
+
+
+def merge_ghz_csvs(paths: Iterable[Path], out_path: Path) -> Path:
+    """Concatenate per-machine GHZ CSVs into one file (``results/ghz_benchmark.csv``).
+
+    Each machine writes its own ``ghz_benchmark_<tag>.csv``; the merged file is
+    the single raw-results table the README and plots are built from.
+    """
+    out_path = Path(out_path)
+    sources = [Path(p) for p in paths if Path(p).resolve() != out_path.resolve()]
+    rows = load_ghz_rows(sources)
+    if not rows:
+        raise ValueError("no GHZ rows found in " + ", ".join(map(str, sources)))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    return out_path
 
 
 def _series_label(row: dict) -> str:
@@ -258,12 +277,22 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Regenerate plots from result CSVs.")
     sub = parser.add_subparsers(dest="kind", required=True)
     ghz_parser = sub.add_parser("ghz", help="GHZ benchmark plots")
-    ghz_parser.add_argument("csv", nargs="+", type=Path)
+    ghz_parser.add_argument("csv", nargs="*", type=Path,
+                            help="GHZ CSVs; default: every <outdir>/ghz_benchmark_*.csv")
     ghz_parser.add_argument("--outdir", type=Path, default=Path("results"))
+    ghz_parser.add_argument("--merge-to", type=Path, default=None,
+                            help="also write the concatenated rows to this CSV")
     vqe_parser = sub.add_parser("vqe", help="H2 VQE plots")
     vqe_parser.add_argument("--outdir", type=Path, default=Path("results"))
     args = parser.parse_args(argv)
 
+    if args.kind == "ghz" and not args.csv:
+        args.csv = sorted(p for p in args.outdir.glob("ghz_benchmark_*.csv"))
+        if not args.csv:
+            parser.error(f"no ghz_benchmark_*.csv files in {args.outdir}")
+    if args.kind == "ghz" and args.merge_to is not None:
+        merged = merge_ghz_csvs(args.csv, args.merge_to)
+        print(f"Merged {len(args.csv)} file(s) into {merged}")
     paths = plot_ghz_results(args.csv, args.outdir) if args.kind == "ghz" else plot_vqe_results(args.outdir)
     for path in paths:
         print(f"Plot written to {path}")

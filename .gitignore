@@ -5,3 +5,4 @@ __pycache__/
 .ipynb_checkpoints/
 slurm_*.txt
 output.*
+results/quick/

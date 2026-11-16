@@ -1,0 +1,12 @@
+# Pinned versions, verified on cl2 (AlmaLinux 9.8, Python 3.11) in November 2026.
+# cudaq is pinned on purpose: NVIDIA has announced changes to `sample`/`observe`
+# in future releases. The cudaq meta-package picks the CUDA 12 or 13 build at
+# install time to match the local driver.
+cudaq==0.16.0.post1
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.11.2
+pyscf==2.15.0
+openfermion==1.8.1
+openfermionpyscf==0.5
+pytest==9.2.0
