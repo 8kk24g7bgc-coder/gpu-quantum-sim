@@ -59,3 +59,6 @@ step "Merging GHZ results and regenerating plots"
 
 step "Regenerating README.md from the results"
 "$PYTHON" scripts/build_readme.py
+
+step "Rebuilding the interactive demo page (docs/index.html)"
+"$PYTHON" scripts/build_viz.py

@@ -7,6 +7,7 @@
 #   make vqe            full H2 VQE sweep             -> results/h2_*.csv/json/png
 #   make plots          merge all GHZ CSVs and regenerate every plot
 #   make readme         regenerate README.md from the result files
+#   make viz            rebuild the interactive demo page (docs/index.html)
 #   make all            install, test, both experiments, all plots and the README
 #
 # Every machine writes its own GHZ file (ghz_benchmark_<tag>.csv); `make plots`
@@ -23,10 +24,10 @@ GHZ_TAG     ?= local
 GHZ_ARGS    ?=
 VQE_ARGS    ?=
 
-.PHONY: help install test quick ghz ghz-quick vqe vqe-quick plots readme all clean
+.PHONY: help install test quick ghz ghz-quick vqe vqe-quick plots readme viz all clean
 
 help:
-	@sed -n '3,11p' Makefile | sed 's/^# \{0,1\}//'
+	@sed -n '3,12p' Makefile | sed 's/^# \{0,1\}//'
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -57,7 +58,10 @@ plots:
 readme:
 	$(PYTHON) scripts/build_readme.py
 
-all: install test ghz vqe plots readme
+viz:
+	$(PYTHON) scripts/build_viz.py
+
+all: install test ghz vqe plots readme viz
 
 clean:
 	rm -rf $(RESULTS)/quick .pytest_cache src/__pycache__ tests/__pycache__

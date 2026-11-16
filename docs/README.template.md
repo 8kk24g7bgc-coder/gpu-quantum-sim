@@ -6,6 +6,8 @@
 ![CUDA-Q {{cudaq_version}}](https://img.shields.io/badge/CUDA--Q-{{cudaq_version}}-76B900)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 
+**[Live demo](https://8kk24g7bgc-coder.github.io/gpu-quantum-sim/)**: explore the memory wall, build a GHZ state gate by gate, and find the H₂ ground state yourself, all in the browser and on the measured data.
+
 This project measures how much a GPU speeds up quantum-circuit simulation, then uses the same simulator for a real chemistry problem. Statevector simulation of GHZ circuits reached **{{max_qubits}} qubits** (a {{max_state_cpu}} state on the CPU), and on an NVIDIA {{gpu_name}} the cuStateVec backend was **{{speedup_cmp}}× faster** than an {{cpu_cores}}-core {{cpu_name}} at {{n_cmp}} qubits ({{gpu_time_cmp}} instead of {{cpu_time_cmp}}). A variational quantum eigensolver (VQE) with a UCCSD ansatz reproduces the H₂ potential energy curve at {{n_bonds}} bond lengths with a **maximum error of {{max_vqe_error}} mHa** against exact full configuration interaction (FCI), well inside chemical accuracy (1.6 mHa), and places the equilibrium at {{r_eq}} Å and {{e_min}} Ha. Every number on this page is computed from the files in [`results/`](results/) by [`scripts/build_readme.py`](scripts/build_readme.py).
 
 ## Key results
@@ -73,6 +75,7 @@ make quick              # reduced GHZ and VQE runs, each under 2 minutes on a CP
 make ghz GHZ_TAG=mine   # full GHZ benchmark on this machine -> results/ghz_benchmark_mine.csv
 make vqe                # full H2 scan, a few minutes on a CPU
 make plots readme       # merge all GHZ CSVs, redraw every plot, regenerate this README
+make viz                # rebuild the interactive demo page (docs/index.html)
 ```
 
 - **No GPU?** Open the [Colab notebook](notebooks/colab_quickstart.ipynb) on a free T4. On a machine without a GPU, the GPU part is skipped with a message and everything else still runs.

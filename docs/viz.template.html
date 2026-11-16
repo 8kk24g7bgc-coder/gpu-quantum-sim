@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Quantum Simulation Lab · gpu-quantum-sim</title>
+<meta name="description" content="Interactive companion to gpu-quantum-sim: the memory wall of statevector simulation, a live GHZ circuit and an exact H2 VQE explorer, built on measured NVIDIA CUDA-Q results."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --bg-0:#0a0d12; --bg-1:#11151c; --bg-2:#1a2029;
+    --ink:#e6ecf4; --ink-dim:#8c99ad; --line:#23303f;
+    --accent:#ffb43a; --accent-2:#3ad1c1; --accent-3:#ff5577;
+    --cpu:#6f9be0; --gpu:#76b900;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",ui-monospace,monospace;
+    --serif:"Fraunces","Cormorant Garamond",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg-0);color:var(--ink);
+    font-family:var(--mono);font-size:14px;overflow:hidden;}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(255,180,58,0.06), transparent 40%),
+      radial-gradient(circle at 85% 82%, rgba(58,209,193,0.05), transparent 45%);}
+  .grain{position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:1;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.4'/></svg>");}
+
+  header{position:relative;z-index:3;display:flex;align-items:center;gap:28px;
+    padding:12px 24px;border-bottom:1px solid var(--line);background:rgba(10,13,18,.65);backdrop-filter:blur(14px);}
+  header h1{font-family:var(--serif);font-weight:500;font-size:22px;margin:0;white-space:nowrap;}
+  header h1 a{color:inherit;text-decoration:none}
+  nav{display:flex;gap:4px;flex:1;}
+  nav button{font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);background:transparent;
+    border:1px solid transparent;padding:7px 14px;cursor:pointer;border-radius:2px;}
+  nav button:hover{color:var(--ink);}
+  nav button[aria-selected="true"]{color:var(--ink);border-color:var(--line);background:var(--bg-1);
+    box-shadow:inset 0 -2px 0 var(--accent);}
+  .repo{color:var(--ink-dim);font-size:12px;text-decoration:none;border-bottom:1px solid var(--line);white-space:nowrap}
+  .repo:hover{color:var(--accent)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  main{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr 1fr;height:calc(100vh - 57px);}
+  .pane{position:relative;display:flex;flex-direction:column;min-height:0;}
+  .pane.left{border-right:1px solid var(--line);}
+  #three-canvas{flex:1;min-height:0;position:relative;}
+  #three-canvas canvas{display:block;}
+  .caption{position:absolute;left:18px;top:16px;right:18px;z-index:3;pointer-events:none;
+    font-family:var(--serif);font-size:15px;line-height:1.45;color:var(--ink);max-width:46ch;}
+  .caption small{display:block;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin-top:4px;line-height:1.5}
+
+  .hud{position:absolute;left:18px;bottom:18px;right:18px;z-index:3;display:none;gap:14px;align-items:flex-end;flex-wrap:wrap;
+    padding:14px 16px;border:1px solid var(--line);background:rgba(17,21,28,0.78);backdrop-filter:blur(18px);border-radius:2px;}
+  .hud.active{display:flex}
+  .group{display:flex;flex-direction:column;gap:6px;min-width:170px;flex:1;}
+  .group.tight{flex:0 0 auto;min-width:0}
+  .group label,.lbl{font-size:11px;letter-spacing:.06em;color:var(--ink-dim);}
+  .val{color:var(--accent);font-size:12px;}
+  input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line);outline:none;margin:8px 0}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--accent);border:2px solid var(--bg-0);cursor:pointer}
+  input[type="range"]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-0);cursor:pointer}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  button.b{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 13px;cursor:pointer;border-radius:2px;}
+  button.b:hover{border-color:var(--ink-dim)}
+  button.b.primary{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:700}
+  button.b:disabled{opacity:.4;cursor:default}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+  .seg button{font-family:var(--mono);font-size:12px;background:transparent;color:var(--ink-dim);border:0;padding:7px 12px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--ink)}
+
+  .panel{display:none;flex-direction:column;min-height:0;height:100%;overflow:auto;padding:18px 22px 14px}
+  .panel.active{display:flex}
+  .readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);}
+  .stat{background:var(--bg-1);padding:11px 13px;min-width:0}
+  .stat .k{font-size:11px;color:var(--ink-dim);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v small{font-size:11px;color:var(--ink-dim);font-weight:400}
+  .accent{color:var(--accent)} .teal{color:var(--accent-2)} .coral{color:var(--accent-3)}
+  .cpuc{color:var(--cpu)} .gpuc{color:var(--gpu)}
+  .chart-box{position:relative;flex:1;min-height:220px;margin-top:16px}
+  .chart-box.half{min-height:190px}
+  .chart-title{font-family:var(--serif);font-size:15px;margin:18px 0 0;color:var(--ink)}
+  .chart-title span{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-left:8px}
+  .note{font-size:11.5px;line-height:1.6;color:var(--ink-dim);margin-top:12px;max-width:72ch}
+  .badge{display:inline-block;font-size:10.5px;padding:2px 7px;border:1px solid var(--line);border-radius:2px;margin-right:6px}
+  .badge.measured{color:var(--accent-2);border-color:rgba(58,209,193,.4)}
+  .badge.live{color:var(--accent);border-color:rgba(255,180,58,.4)}
+  .gates{display:flex;flex-wrap:wrap;gap:4px;margin-top:14px}
+  .gate{font-size:11px;padding:4px 7px;border:1px solid var(--line);color:var(--ink-dim);border-radius:2px}
+  .gate.done{color:var(--accent-2);border-color:rgba(58,209,193,.45)}
+  .gate.next{color:var(--bg-0);background:var(--accent);border-color:var(--accent)}
+  .amps{margin-top:10px;font-size:12px;line-height:1.7}
+  .amps b{color:var(--accent-2);font-weight:500}
+  details.terms{margin-top:12px;font-size:11.5px;color:var(--ink-dim)}
+  details.terms summary{cursor:pointer;color:var(--ink)}
+  .term-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 16px;margin-top:8px;font-size:11.5px}
+  .term-grid span{white-space:nowrap}
+  .term-grid b{color:var(--ink);font-weight:500}
+  .empty{padding:40px;text-align:center;color:var(--ink-dim);font-family:var(--serif);font-size:16px}
+
+  @media (max-width: 960px){
+    html,body{overflow:auto;height:auto}
+    header{flex-wrap:wrap;gap:10px 18px}
+    nav{order:3;flex-basis:100%;overflow-x:auto}
+    main{grid-template-columns:1fr;height:auto}
+    .pane.left{border-right:0;border-bottom:1px solid var(--line);height:auto}
+    #three-canvas{height:46vh;flex:none}
+    .hud{position:relative;left:auto;right:auto;bottom:auto;margin:0;border-left:0;border-right:0}
+    .caption{position:relative;left:auto;top:auto;right:auto;max-width:none;padding:14px 16px 4px;font-size:14px}
+    .panel{height:auto;overflow:visible}
+    .readout{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .chart-box{min-height:240px}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header>
+  <h1><a href="#memory">Quantum Simulation Lab</a></h1>
+  <nav role="tablist" aria-label="Panels">
+    <button role="tab" id="tab-memory" aria-controls="panel-memory" aria-selected="true" data-tab="memory">Memory wall</button>
+    <button role="tab" id="tab-ghz" aria-controls="panel-ghz" aria-selected="false" data-tab="ghz">GHZ circuit</button>
+    <button role="tab" id="tab-vqe" aria-controls="panel-vqe" aria-selected="false" data-tab="vqe">H₂ VQE</button>
+  </nav>
+  <a class="repo" id="repoLink" href="#" target="_blank" rel="noopener">Code and data on GitHub</a>
+</header>
+
+<main>
+  <section class="pane left">
+    <div class="caption" id="caption"></div>
+    <div id="three-canvas" aria-hidden="true"></div>
+
+    <!-- Memory wall controls -->
+    <div class="hud active" data-for="memory">
+      <div class="group">
+        <label for="nSlider">Qubits <span class="val" id="nVal">30</span></label>
+        <input type="range" id="nSlider" min="1" max="40" step="1" value="30"/>
+      </div>
+      <div class="group tight">
+        <span class="lbl">Precision</span>
+        <div class="seg" role="group" aria-label="Precision">
+          <button id="precFp32" aria-pressed="true">fp32 · 8 B</button>
+          <button id="precFp64" aria-pressed="false">fp64 · 16 B</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GHZ controls -->
+    <div class="hud" data-for="ghz">
+      <div class="group">
+        <label for="ghzN">Qubits <span class="val" id="ghzNVal">6</span></label>
+        <input type="range" id="ghzN" min="2" max="10" step="1" value="6"/>
+      </div>
+      <div class="group">
+        <label for="shots">Shots <span class="val" id="shotsVal">1000</span></label>
+        <input type="range" id="shots" min="100" max="4000" step="100" value="1000"/>
+      </div>
+      <div class="btns">
+        <button class="b" id="stepBtn">Apply next gate</button>
+        <button class="b primary" id="runBtn">Run circuit</button>
+        <button class="b" id="sampleBtn">Measure</button>
+        <button class="b" id="ghzReset">Reset</button>
+      </div>
+    </div>
+
+    <!-- VQE controls -->
+    <div class="hud" data-for="vqe">
+      <div class="group">
+        <label for="rSlider">Bond length R <span class="val" id="rVal">0.75 Å</span></label>
+        <input type="range" id="rSlider" min="0" max="44" step="1" value="9"/>
+      </div>
+      <div class="group">
+        <label for="thSlider">Double-excitation angle θ <span class="val" id="thVal">0.000 rad</span></label>
+        <input type="range" id="thSlider" min="-1.5708" max="1.5708" step="0.0005" value="0"/>
+      </div>
+      <div class="btns">
+        <button class="b primary" id="optBtn">Find the minimum</button>
+        <button class="b" id="hfBtn">Back to Hartree-Fock</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane right">
+    <!-- Memory wall -->
+    <div class="panel active" id="panel-memory" role="tabpanel" aria-labelledby="tab-memory">
+      <div class="readout">
+        <div class="stat"><div class="k">Amplitudes 2ⁿ</div><div class="v accent" id="mAmps">–</div></div>
+        <div class="stat"><div class="k">State, fp32</div><div class="v" id="mFp32">–</div></div>
+        <div class="stat"><div class="k">State, fp64</div><div class="v" id="mFp64">–</div></div>
+        <div class="stat"><div class="k" id="mCpuK">CPU time per run</div><div class="v cpuc" id="mCpu">–</div></div>
+        <div class="stat"><div class="k" id="mGpuK">GPU time per run</div><div class="v gpuc" id="mGpu">–</div></div>
+        <div class="stat"><div class="k">GPU speedup</div><div class="v teal" id="mSpeed">–</div></div>
+      </div>
+      <h2 class="chart-title">Measured time per run <span>median of 5 runs, log scale</span></h2>
+      <div class="chart-box"><canvas id="memChart" aria-label="Measured CPU and GPU time per run versus qubits"></canvas></div>
+      <p class="note" id="memNote"></p>
+    </div>
+
+    <!-- GHZ -->
+    <div class="panel" id="panel-ghz" role="tabpanel" aria-labelledby="tab-ghz">
+      <div class="readout">
+        <div class="stat"><div class="k">Gates applied</div><div class="v accent" id="gCount">0</div></div>
+        <div class="stat"><div class="k">Amplitude updates</div><div class="v" id="gWork">0</div></div>
+        <div class="stat"><div class="k">Non-zero amplitudes</div><div class="v teal" id="gNz">1</div></div>
+      </div>
+      <div class="gates" id="gateList" aria-label="Circuit"></div>
+      <div class="amps" id="ampList"></div>
+      <h2 class="chart-title">Measurement outcomes <span id="histSub">press Measure</span></h2>
+      <div class="chart-box half"><canvas id="ghzChart" aria-label="Histogram of measured bitstrings"></canvas></div>
+      <p class="note"><span class="badge live">Live in your browser</span>A statevector of 2ⁿ amplitudes is stored in JavaScript and every gate loops over all of them: the same kind of work CUDA-Q does on 2³⁰ amplitudes at 30 qubits. Bitstrings are written q₀q₁…, as CUDA-Q prints them.</p>
+    </div>
+
+    <!-- VQE -->
+    <div class="panel" id="panel-vqe" role="tabpanel" aria-labelledby="tab-vqe">
+      <div class="readout">
+        <div class="stat"><div class="k">E(θ)</div><div class="v accent" id="vE">–</div></div>
+        <div class="stat"><div class="k">Exact FCI</div><div class="v" id="vFci">–</div></div>
+        <div class="stat"><div class="k">|E − E<sub>FCI</sub>|</div><div class="v" id="vErr">–</div></div>
+        <div class="stat"><div class="k">Hartree-Fock</div><div class="v coral" id="vHf">–</div></div>
+        <div class="stat"><div class="k">Correlation energy recovered</div><div class="v teal" id="vCorr">–</div></div>
+        <div class="stat"><div class="k">Optimal θ</div><div class="v" id="vTh">–</div></div>
+      </div>
+      <h2 class="chart-title">Energy landscape at this bond length <span>E(θ) from the 15-term Hamiltonian</span></h2>
+      <div class="chart-box half"><canvas id="landChart" aria-label="Energy versus angle theta"></canvas></div>
+      <h2 class="chart-title">Potential energy curve <span>VQE points measured with CUDA-Q</span></h2>
+      <div class="chart-box half"><canvas id="pesChart" aria-label="H2 potential energy curve"></canvas></div>
+      <details class="terms"><summary>The 15 Pauli terms of the qubit Hamiltonian at this R</summary><div class="term-grid" id="termGrid"></div></details>
+      <p class="note"><span class="badge live">Live</span>E(θ) for |ψ(θ)⟩ = cos θ |0011⟩ + sin θ |1100⟩ is computed in your browser from the real Jordan–Wigner Hamiltonian. For H₂ this one double-excitation angle is the UCCSD parameter that matters, so its minimum is exact FCI. <span class="badge measured">Measured</span>The green points are the CUDA-Q VQE run (UCCSD, 3 parameters, <span id="optName">COBYLA</span>).</p>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+<script id="data">
+/* Injected by scripts/build_viz.py from results/ — do not edit by hand. */
+const DATA = /*__VIZ_DATA__*/null;
+</script>
+
+<script id="physics">
+/* ============================================================
+   Physics core (no DOM). Also exercised by tests/test_viz.py
+   through Node, against the Python reference values.
+   ============================================================ */
+const Phys = (() => {
+  const GIB = 1024 ** 3;
+
+  function stateBytes(n, bytesPerAmp){ return Math.pow(2, n) * bytesPerAmp; }
+
+  /* --- Statevector simulator (qubit k = bit k of the index, as in CUDA-Q) --- */
+  function zeroState(n){
+    const dim = 1 << n, re = new Float64Array(dim), im = new Float64Array(dim);
+    re[0] = 1; return { n, re, im };
+  }
+  function applyH(s, q){
+    const m = 1 << q, r = Math.SQRT1_2, { re, im } = s;
+    for (let i = 0; i < re.length; i++){
+      if (i & m) continue;
+      const j = i | m, ar = re[i], ai = im[i], br = re[j], bi = im[j];
+      re[i] = r * (ar + br); im[i] = r * (ai + bi);
+      re[j] = r * (ar - br); im[j] = r * (ai - bi);
+    }
+  }
+  function applyCX(s, c, t){
+    const mc = 1 << c, mt = 1 << t, { re, im } = s;
+    for (let i = 0; i < re.length; i++){
+      if (!(i & mc) || (i & mt)) continue;
+      const j = i | mt;
+      let x = re[i]; re[i] = re[j]; re[j] = x;
+      x = im[i]; im[i] = im[j]; im[j] = x;
+    }
+  }
+  function ghzGates(n){
+    const g = [{ op: "H", q: 0 }];
+    for (let i = 0; i < n - 1; i++) g.push({ op: "CX", c: i, t: i + 1 });
+    return g;
+  }
+  function applyGate(s, g){ g.op === "H" ? applyH(s, g.q) : applyCX(s, g.c, g.t); }
+  function probabilities(s){
+    const p = new Float64Array(s.re.length);
+    for (let i = 0; i < p.length; i++) p[i] = s.re[i] ** 2 + s.im[i] ** 2;
+    return p;
+  }
+  function bitstring(i, n){ let b = ""; for (let k = 0; k < n; k++) b += (i >> k) & 1; return b; }
+  function sample(p, shots, rand = Math.random){
+    const cdf = new Float64Array(p.length); let acc = 0;
+    for (let i = 0; i < p.length; i++){ acc += p[i]; cdf[i] = acc; }
+    const counts = new Map();
+    for (let s = 0; s < shots; s++){
+      const u = rand() * acc; let lo = 0, hi = cdf.length - 1;
+      while (lo < hi){ const mid = (lo + hi) >> 1; if (cdf[mid] < u) lo = mid + 1; else hi = mid; }
+      counts.set(lo, (counts.get(lo) || 0) + 1);
+    }
+    return counts;
+  }
+
+  /* --- Pauli-string expectation value <psi|P|psi> --- */
+  function applyPauliWord(word, re, im){
+    const dim = re.length, ore = new Float64Array(dim), oim = new Float64Array(dim);
+    for (let i = 0; i < dim; i++){
+      if (re[i] === 0 && im[i] === 0) continue;
+      let j = i, pr = 1, pi = 0;                     // phase = pr + i*pi
+      for (let k = 0; k < word.length; k++){
+        const ch = word[k], bit = (i >> k) & 1;
+        if (ch === "X"){ j ^= (1 << k); }
+        else if (ch === "Y"){ j ^= (1 << k);           // Y|0> = i|1>, Y|1> = -i|0>
+          const s = bit ? -1 : 1; const nr = -pi * s, ni = pr * s; pr = nr; pi = ni; }
+        else if (ch === "Z"){ if (bit){ pr = -pr; pi = -pi; } }
+      }
+      ore[j] += pr * re[i] - pi * im[i];
+      oim[j] += pr * im[i] + pi * re[i];
+    }
+    return [ore, oim];
+  }
+  function expectation(terms, re, im){
+    let e = 0;
+    for (const [word, c] of terms){
+      const [pr, pi] = applyPauliWord(word, re, im);
+      for (let i = 0; i < re.length; i++) e += c * (re[i] * pr[i] + im[i] * pi[i]);
+    }
+    return e;
+  }
+  function vqeState(theta, nq, hfIdx, dblIdx){
+    const dim = 1 << nq, re = new Float64Array(dim), im = new Float64Array(dim);
+    re[hfIdx] = Math.cos(theta); re[dblIdx] = Math.sin(theta);
+    return [re, im];
+  }
+  function vqeEnergy(terms, theta, nq, hfIdx, dblIdx){
+    const [re, im] = vqeState(theta, nq, hfIdx, dblIdx);
+    return expectation(terms, re, im);
+  }
+  /* closed form of the same E(theta): (A+B)/2 + (A-B)/2 cos 2θ + C sin 2θ */
+  function vqeOptimum(block){
+    const [a, b, c] = block;
+    const theta = 0.5 * Math.atan2(2 * c, a - b) + Math.PI / 2;
+    const wrap = Math.atan2(Math.sin(2 * theta), Math.cos(2 * theta)) / 2;
+    const e = 0.5 * (a + b) - Math.hypot(0.5 * (a - b), c);
+    return { theta: wrap, energy: e };
+  }
+
+  return { GIB, stateBytes, zeroState, applyH, applyCX, ghzGates, applyGate,
+           probabilities, bitstring, sample, applyPauliWord, expectation,
+           vqeState, vqeEnergy, vqeOptimum };
+})();
+if (typeof module !== "undefined") module.exports = Phys;
+</script>
+
+<script id="app">
+(() => {
+if (typeof document === "undefined") return;
+const $ = id => document.getElementById(id);
+const css = getComputedStyle(document.documentElement);
+const C = {
+  ink: css.getPropertyValue("--ink").trim(), dim: css.getPropertyValue("--ink-dim").trim(),
+  line: css.getPropertyValue("--line").trim(), accent: css.getPropertyValue("--accent").trim(),
+  teal: css.getPropertyValue("--accent-2").trim(), coral: css.getPropertyValue("--accent-3").trim(),
+  cpu: css.getPropertyValue("--cpu").trim(), gpu: css.getPropertyValue("--gpu").trim(),
+};
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+if (!DATA || typeof THREE === "undefined" || typeof Chart === "undefined"){
+  document.querySelector("main").innerHTML = '<div class="empty">' + (!DATA
+    ? "No data embedded. Run <code>python scripts/build_viz.py</code> to build this page."
+    : "Three.js or Chart.js could not be loaded. Check your connection and reload.") + "</div>";
+  return;
+}
+$("repoLink").href = DATA.repo;
+$("optName").textContent = { cobyla: "COBYLA", lbfgsb: "L-BFGS-B" }[DATA.h2.optimizer] || DATA.h2.optimizer;
+
+/* ---------------- formatting ---------------- */
+function fmtBytes(b){
+  const u = ["B","KiB","MiB","GiB","TiB","PiB"]; let i = 0;
+  while (b >= 1024 && i < u.length - 1){ b /= 1024; i++; }
+  return (b >= 100 || Number.isInteger(b) ? b.toFixed(0) : b.toFixed(b >= 10 ? 1 : 2)) + " " + u[i];
+}
+function fmtTime(s){
+  if (s < 1e-3) return (s * 1e6).toFixed(0) + " µs";
+  if (s < 1) return (s * 1e3).toFixed(s < 0.01 ? 2 : 1) + " ms";
+  if (s < 60) return s.toFixed(2) + " s";
+  if (s < 3600) return (s / 60).toFixed(1) + " min";
+  return (s / 3600).toFixed(2) + " h";
+}
+const fmtInt = x => x.toLocaleString("en-US");
+const fmtE = e => (e < 0 ? "−" : "") + Math.abs(e).toFixed(6) + " <small>Ha</small>";
+function fmtMilli(x){
+  if (x === 0) return "0";
+  if (x >= 0.01) return x.toFixed(x < 1 ? 3 : 2);
+  const e = Math.floor(Math.log10(x)), m = x / 10 ** e;
+  const sup = String(e).replace(/-/g, "⁻").replace(/\d/g, d => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]);
+  return m.toFixed(1) + "×10" + sup;
+}
+
+/* ---------------- Three.js shell ---------------- */
+const host = $("three-canvas");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+host.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 5000);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+
+function makeScene(){
+  const s = new THREE.Scene();
+  s.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const d = new THREE.DirectionalLight(0xffffff, 0.75); d.position.set(4, 8, 6); s.add(d);
+  const d2 = new THREE.DirectionalLight(0x3ad1c1, 0.25); d2.position.set(-6, -2, -4); s.add(d2);
+  return s;
+}
+function label(text, color = C.ink, size = 44){
+  const cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+  ctx.font = `500 ${size}px JetBrains Mono, monospace`;
+  const w = Math.ceil(ctx.measureText(text).width) + 24, h = size + 22;
+  cv.width = w; cv.height = h;
+  ctx.font = `500 ${size}px JetBrains Mono, monospace`;
+  ctx.fillStyle = color; ctx.textBaseline = "middle"; ctx.fillText(text, 12, h / 2);
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.userData.aspect = w / h; sp.scale.set(w / h, 1, 1);
+  return sp;
+}
+function setLabelText(sp, text, color){
+  const fresh = label(text, color);
+  sp.material.map.dispose(); sp.material.map = fresh.material.map;
+  sp.userData.aspect = fresh.userData.aspect; sp.material.needsUpdate = true;
+}
+
+/* ---------------- Chart.js defaults ---------------- */
+Chart.defaults.color = C.dim;
+Chart.defaults.font.family = "JetBrains Mono, monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+Chart.defaults.animation = REDUCED ? false : { duration: 250 };
+const vline = {   // vertical cursor line at options.plugins.vline.x
+  id: "vline",
+  afterDatasetsDraw(chart, _a, opt){
+    if (opt.x == null) return;
+    const { ctx, chartArea: a, scales: { x } } = chart, px = x.getPixelForValue(opt.x);
+    if (px < a.left || px > a.right) return;
+    ctx.save(); ctx.strokeStyle = opt.color || C.accent; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke(); ctx.restore();
+  }
+};
+Chart.register(vline);
+
+/* =========================================================
+   Panel 1: the memory wall
+   ========================================================= */
+const G = DATA.ghz;
+const mem = { scene: makeScene(), n: 30, bpa: 8, side: 1, cam: { pos: null, target: new THREE.Vector3() } };
+const devices = [];
+function addDevice(name, gib, color, headroom){
+  const side = Math.cbrt(gib);
+  const geo = new THREE.BoxGeometry(side, side, side); geo.translate(side / 2, side / 2, side / 2);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+  const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.035, depthWrite: false }));
+  const tag = label(`${name} · ${gib.toFixed(0)} GiB`, color, 40);
+  tag.center.set(0, 0); tag.position.set(0, side, 0);
+  mem.scene.add(edges, fill, tag);
+  devices.push({ name, gib, side, headroom, tag, color });
+}
+if (G.gpu_mem_gib) addDevice("GPU " + G.gpu.name, G.gpu_mem_gib, C.gpu, G.headroom.gpu);
+if (G.cpu_ram_gib) addDevice("CPU node " + G.cpu.host, G.cpu_ram_gib, C.cpu, G.headroom.cpu);
+const grid = new THREE.GridHelper(400, 160, 0x23303f, 0x161c25); grid.position.set(0, -0.001, 0); mem.scene.add(grid);
+
+const stateMat = new THREE.MeshStandardMaterial({ color: C.teal, transparent: true, opacity: 0.55, roughness: 0.35, metalness: 0.1 });
+const stateCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5), stateMat);
+const stateEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5)),
+  new THREE.LineBasicMaterial({ color: C.teal }));
+const stateTag = label("state", C.teal, 40); stateTag.center.set(0, 1);
+mem.scene.add(stateCube, stateEdges, stateTag);
+
+const cpuPts = G.cpu.points, gpuPts = G.gpu.points;
+const cpuAt = n => cpuPts.find(p => p[0] === n), gpuAt = n => gpuPts.find(p => p[0] === n);
+const nMin = Math.min(cpuPts[0][0], gpuPts[0][0]);
+const nMax = Math.max(cpuPts[cpuPts.length - 1][0], gpuPts[gpuPts.length - 1][0], G.cpu_oom_n || 0);
+
+const memChart = new Chart($("memChart"), {
+  type: "line",
+  data: { datasets: [
+    { label: `CPU · ${G.cpu.name.replace(/\(R\)|CPU|@.*$/g, "").replace(/\s+/g, " ").trim()} (${G.cpu.precision})`,
+      data: cpuPts.map(p => ({ x: p[0], y: p[1] })), borderColor: C.cpu, backgroundColor: C.cpu, pointRadius: 3, tension: 0 },
+    { label: `GPU · ${G.gpu.name} (${G.gpu.precision})`,
+      data: gpuPts.map(p => ({ x: p[0], y: p[1] })), borderColor: C.gpu, backgroundColor: C.gpu, pointRadius: 3, tension: 0, pointStyle: "rect" },
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false, parsing: false,
+    scales: {
+      x: { type: "linear", min: nMin - 1, max: nMax + 1, title: { display: true, text: "qubits n" },
+           ticks: { stepSize: 1, callback: v => (Number.isInteger(v) && v % 2 === 0 ? v : "") } },
+      y: { type: "logarithmic", max: 10 ** Math.ceil(Math.log10(Math.max(...cpuPts.map(p => p[1]))) + 0.5), title: { display: true, text: "seconds" },
+           ticks: { callback: v => { const l = Math.log10(v); return Number.isInteger(l) ? "10" + String(l).replace(/-/g, "⁻").replace(/\d/g, d => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]) : ""; } } },
+    },
+    plugins: {
+      legend: { position: "top", align: "start", labels: { boxWidth: 10, boxHeight: 10 } },
+      tooltip: { callbacks: { label: c => `${c.dataset.label.split(" (")[0]}: ${fmtTime(c.parsed.y)} at n=${c.parsed.x}` } },
+      vline: { x: 30 },
+      oom: { n: G.cpu_oom_n },
+    },
+  },
+  plugins: [{
+    id: "oom",
+    afterDatasetsDraw(chart, _a, opt){
+      if (!opt.n) return;
+      const { ctx, chartArea: a, scales: { x } } = chart, px = x.getPixelForValue(opt.n);
+      ctx.save(); ctx.strokeStyle = C.coral; ctx.fillStyle = C.coral; ctx.lineWidth = 2;
+      const py = a.top + 18;
+      ctx.beginPath(); ctx.moveTo(px - 6, py - 6); ctx.lineTo(px + 6, py + 6); ctx.moveTo(px + 6, py - 6); ctx.lineTo(px - 6, py + 6); ctx.stroke();
+      ctx.font = "11px JetBrains Mono, monospace"; ctx.textAlign = "right";
+      ctx.fillText(`n = ${opt.n}: out of memory`, px - 12, py + 4); ctx.restore();
+    }
+  }],
+});
+
+function fitsText(dev, bytes){
+  const need = bytes * dev.headroom / Phys.GIB;
+  return need <= dev.gib;
+}
+function updateMemory(){
+  const n = mem.n, bpa = mem.bpa, bytes = Phys.stateBytes(n, bpa), gib = bytes / Phys.GIB;
+  $("nVal").textContent = n;
+  $("mAmps").textContent = fmtInt(2 ** n);
+  $("mFp32").textContent = fmtBytes(Phys.stateBytes(n, 8));
+  $("mFp64").textContent = fmtBytes(Phys.stateBytes(n, 16));
+  const c = cpuAt(n), g = gpuAt(n);
+  $("mCpu").innerHTML = c ? fmtTime(c[1]) : (n === G.cpu_oom_n ? '<span class="coral">out of memory</span>' : '<small>not measured</small>');
+  $("mGpu").innerHTML = g ? fmtTime(g[1]) : '<small>not measured</small>';
+  $("mSpeed").innerHTML = c && g ? Math.round(c[1] / g[1]).toLocaleString("en-US") + "×" : '<small>–</small>';
+  memChart.options.plugins.vline.x = n; memChart.update("none");
+
+  mem.side = Math.cbrt(gib);
+  stateCube.scale.setScalar(mem.side); stateEdges.scale.setScalar(mem.side);
+  const fitting = devices.filter(d => fitsText(d, bytes));
+  const col = fitting.length === devices.length ? C.teal : fitting.length ? C.accent : C.coral;
+  stateMat.color.set(col); stateEdges.material.color.set(col);
+  setLabelText(stateTag, `${n} qubits · ${fmtBytes(bytes)}`, col);
+
+  const fitNames = fitting.map(d => d.name.split(" ")[0]).join(" and ");
+  const where = fitting.length === devices.length ? "fits on both devices"
+              : fitting.length ? `fits only on the ${fitNames}` : "fits on neither device";
+  $("caption").innerHTML = `A ${n}-qubit state holds ${fmtInt(2 ** n)} amplitudes: ${fmtBytes(bytes)} in ${bpa === 8 ? "fp32" : "fp64"}, and it ${where}.`
+    + `<small>Cube volume ∝ memory. Each added qubit doubles it. The simulator also needs workspace: about ${G.headroom.cpu}× the state on the CPU (measured) and ${G.headroom.gpu}× on the GPU.</small>`;
+  fitCamera(mem, Math.max(mem.side, ...devices.map(d => d.side), 1));
+}
+const largestCpu = cpuPts[cpuPts.length - 1], largestCommon = gpuPts.filter(p => cpuAt(p[0])).pop();
+$("memNote").innerHTML = `<span class="badge measured">Measured</span>CUDA-Q ${'qpp-cpu'} on ${G.cpu.host} (${G.cpu.hardware.physical_cores || "?"} cores) up to n = ${largestCpu[0]}, cuStateVec on a ${G.gpu.name} up to n = ${gpuPts[gpuPts.length - 1][0]}. `
+  + (G.cpu_oom_n ? `At n = ${G.cpu_oom_n} the CPU run was stopped by the out-of-memory killer. ` : "")
+  + `At n = ${largestCommon[0]} the GPU was ${Math.round(cpuAt(largestCommon[0])[1] / largestCommon[1]).toLocaleString("en-US")}× faster. Each point is the median of ${G.repeats} runs of ${G.shots} shots.`;
+
+$("nSlider").addEventListener("input", e => { mem.n = +e.target.value; updateMemory(); });
+function setPrec(bpa){ mem.bpa = bpa; $("precFp32").setAttribute("aria-pressed", bpa === 8); $("precFp64").setAttribute("aria-pressed", bpa === 16); updateMemory(); }
+$("precFp32").onclick = () => setPrec(8); $("precFp64").onclick = () => setPrec(16);
+
+function fitCamera(st, size){
+  const d = Math.max(size, 0.6) * 2.4;
+  st.cam.goal = new THREE.Vector3(d * 1.05, d * 0.75, d * 1.25);
+  st.cam.goalTarget = new THREE.Vector3(size * 0.45, size * 0.38, size * 0.45);
+  if (!st.cam.pos){ st.cam.pos = st.cam.goal.clone(); st.cam.target.copy(st.cam.goalTarget); }
+  st.cam.fresh = true;
+}
+
+/* =========================================================
+   Panel 2: GHZ circuit, live
+   ========================================================= */
+const ghz = { scene: makeScene(), n: 6, state: null, gates: [], k: 0, timer: null, cam: { pos: null, target: new THREE.Vector3() } };
+let bars = null, barTargets = null, barHeights = null;
+const BAR_H = 4;
+const ghzChart = new Chart($("ghzChart"), {
+  type: "bar",
+  data: { labels: [], datasets: [{ data: [], backgroundColor: C.teal, borderRadius: 1, maxBarThickness: 46 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, title: { display: true, text: "counts" } }, x: { ticks: { autoSkip: false, maxRotation: 0 } } } },
+});
+function buildBars(){
+  if (bars){ ghz.scene.remove(bars); bars.geometry.dispose(); bars.material.dispose(); }
+  const dim = 1 << ghz.n, cols = 1 << Math.ceil(ghz.n / 2), rows = dim / cols, gap = 0.18;
+  const geo = new THREE.BoxGeometry(1 - gap, 1, 1 - gap); geo.translate(0, 0.5, 0);
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.05 });
+  bars = new THREE.InstancedMesh(geo, mat, dim);
+  bars.userData = { cols, rows };
+  barTargets = new Float64Array(dim); barHeights = new Float64Array(dim);
+  ghz.scene.add(bars);
+  for (let i = 0; i < dim; i++) bars.setColorAt(i, new THREE.Color(C.line));
+  const size = Math.max(cols, rows);
+  ghz.cam.goal = new THREE.Vector3(size * 0.9 + 2, size * 0.95 + 5, size * 1.35 + 4);
+  ghz.cam.goalTarget = new THREE.Vector3(0, -size * 0.12, 0);
+  if (!ghz.cam.pos || ghz.cam.n !== ghz.n){ ghz.cam.pos = ghz.cam.goal.clone(); ghz.cam.target.copy(ghz.cam.goalTarget); ghz.cam.fresh = true; }
+  ghz.cam.n = ghz.n;
+}
+const ghzFloor = new THREE.GridHelper(80, 80, 0x23303f, 0x161c25); ghz.scene.add(ghzFloor);
+const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color();
+function placeBars(){
+  const { cols, rows } = bars.userData;
+  for (let i = 0; i < barHeights.length; i++){
+    const x = (i % cols) - (cols - 1) / 2, z = Math.floor(i / cols) - (rows - 1) / 2;
+    tmpM.makeScale(1, Math.max(barHeights[i], 0.02), 1); tmpM.setPosition(x, 0, z);
+    bars.setMatrixAt(i, tmpM);
+    tmpC.set(barTargets[i] > 1e-12 ? C.teal : C.line); bars.setColorAt(i, tmpC);
+  }
+  bars.instanceMatrix.needsUpdate = true; if (bars.instanceColor) bars.instanceColor.needsUpdate = true;
+}
+function resetGhz(){
+  clearInterval(ghz.timer); ghz.timer = null;
+  ghz.state = Phys.zeroState(ghz.n); ghz.gates = Phys.ghzGates(ghz.n); ghz.k = 0;
+  buildBars(); refreshGhz(true);
+  ghzChart.data.labels = []; ghzChart.data.datasets[0].data = []; ghzChart.update("none");
+  $("histSub").textContent = "press Measure";
+}
+function refreshGhz(instant){
+  const p = Phys.probabilities(ghz.state), n = ghz.n;
+  for (let i = 0; i < p.length; i++){ barTargets[i] = p[i] * BAR_H; if (instant || REDUCED) barHeights[i] = barTargets[i]; }
+  placeBars();
+  $("gCount").textContent = `${ghz.k} / ${ghz.gates.length}`;
+  $("gWork").textContent = fmtInt(ghz.k * (1 << n));
+  const nz = []; p.forEach((v, i) => { if (v > 1e-12) nz.push(i); });
+  $("gNz").textContent = nz.length;
+  $("ampList").innerHTML = nz.slice(0, 4).map(i =>
+    `<b>|${Phys.bitstring(i, n)}⟩</b> amplitude ${ghz.state.re[i].toFixed(4)} · probability ${p[i].toFixed(3)}`).join("<br>")
+    + (nz.length > 4 ? `<br>… ${nz.length - 4} more` : "");
+  $("gateList").innerHTML = ghz.gates.map((g, i) =>
+    `<span class="gate ${i < ghz.k ? "done" : i === ghz.k ? "next" : ""}">${g.op === "H" ? "H q" + g.q : "CX q" + g.c + "→q" + g.t}</span>`).join("");
+  $("stepBtn").disabled = ghz.k >= ghz.gates.length;
+  $("runBtn").disabled = ghz.k >= ghz.gates.length;
+  const done = ghz.k === ghz.gates.length;
+  $("caption").innerHTML = done
+    ? `The ${n}-qubit GHZ state: only |${"0".repeat(n)}⟩ and |${"1".repeat(n)}⟩ survive, each with probability ½.<small>Bar height = probability of each of the ${fmtInt(1 << n)} basis states. Drag to rotate.</small>`
+    : `Building a ${n}-qubit GHZ state, one gate at a time.<small>Bar height = probability of each of the ${fmtInt(1 << n)} basis states. Each gate updates all of them.</small>`;
+}
+function stepGhz(){
+  if (ghz.k >= ghz.gates.length) return false;
+  Phys.applyGate(ghz.state, ghz.gates[ghz.k]); ghz.k++; refreshGhz(false); return true;
+}
+$("stepBtn").onclick = stepGhz;
+$("runBtn").onclick = () => {
+  clearInterval(ghz.timer);
+  if (REDUCED){ while (stepGhz()); return; }
+  ghz.timer = setInterval(() => { if (!stepGhz()){ clearInterval(ghz.timer); ghz.timer = null; } }, 420);
+};
+$("ghzReset").onclick = resetGhz;
+$("ghzN").addEventListener("input", e => { ghz.n = +e.target.value; $("ghzNVal").textContent = ghz.n; resetGhz(); });
+$("shots").addEventListener("input", e => { $("shotsVal").textContent = e.target.value; });
+$("sampleBtn").onclick = () => {
+  const shots = +$("shots").value, counts = Phys.sample(Phys.probabilities(ghz.state), shots);
+  const keys = [...counts.keys()].sort((a, b) => a - b).slice(0, 32);
+  ghzChart.data.labels = keys.map(i => Phys.bitstring(i, ghz.n));
+  ghzChart.data.datasets[0].data = keys.map(i => counts.get(i));
+  ghzChart.update();
+  $("histSub").textContent = `${fmtInt(shots)} shots, ${counts.size} distinct outcome${counts.size > 1 ? "s" : ""}`;
+};
+
+/* =========================================================
+   Panel 3: H2 VQE explorer
+   ========================================================= */
+const H2 = DATA.h2;
+const vqe = { scene: makeScene(), i: H2.R.indexOf(0.75) >= 0 ? H2.R.indexOf(0.75) : 0, theta: 0, anim: null,
+              cam: { pos: null, target: new THREE.Vector3() } };
+$("rSlider").max = H2.R.length - 1; $("rSlider").value = vqe.i;
+const SCALE = 2.2;   // scene units per Ångström
+const atomMat = new THREE.MeshStandardMaterial({ color: 0xe6ecf4, roughness: 0.25, metalness: 0.05, emissive: 0x111820 });
+const atomA = new THREE.Mesh(new THREE.SphereGeometry(0.62, 48, 32), atomMat);
+const atomB = atomA.clone();
+const glowMat = new THREE.MeshBasicMaterial({ color: C.teal, transparent: true, opacity: 0.18, depthWrite: false });
+const cloud = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), glowMat);
+const bondMat = new THREE.MeshStandardMaterial({ color: C.teal, transparent: true, opacity: 0.85, roughness: 0.3 });
+const bond = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 24), bondMat); bond.rotation.z = Math.PI / 2;
+const rTag = label("R", C.ink, 40);
+vqe.scene.add(atomA, atomB, cloud, bond, rTag);
+vqe.cam.goal = new THREE.Vector3(0, 2.6, 9.5); vqe.cam.goalTarget = new THREE.Vector3(0, 0, 0);
+vqe.cam.pos = vqe.cam.goal.clone(); vqe.cam.target.copy(vqe.cam.goalTarget);
+
+const thetas = Array.from({ length: 181 }, (_, k) => -Math.PI / 2 + k * Math.PI / 180);
+const landChart = new Chart($("landChart"), {
+  type: "line",
+  data: { datasets: [
+    { label: "E(θ)", data: [], borderColor: C.accent, pointRadius: 0, borderWidth: 2, tension: 0 },
+    { label: "Exact FCI", data: [], borderColor: C.ink, borderDash: [5, 4], pointRadius: 0, borderWidth: 1 },
+    { label: "you are here", data: [], borderColor: C.accent, backgroundColor: C.accent, pointRadius: 6, showLine: false },
+    { label: "optimizer path", data: [], borderColor: C.teal, backgroundColor: C.teal, pointRadius: 2.5, showLine: true, borderWidth: 1 },
+  ]},
+  options: { responsive: true, maintainAspectRatio: false, parsing: false,
+    scales: { x: { type: "linear", min: -Math.PI / 2, max: Math.PI / 2, title: { display: true, text: "θ [rad]" } },
+              y: { title: { display: true, text: "Ha" } } },
+    plugins: { legend: { labels: { boxWidth: 10, boxHeight: 2, filter: it => it.text !== "you are here" } } } },
+});
+const pesChart = new Chart($("pesChart"), {
+  type: "line",
+  data: { datasets: [
+    { label: "Exact FCI (PySCF)", data: H2.R.map((r, k) => ({ x: r, y: H2.E_fci[k] })), borderColor: C.ink, pointRadius: 0, borderWidth: 1.5 },
+    { label: "Hartree-Fock", data: H2.R.map((r, k) => ({ x: r, y: H2.E_hf[k] })), borderColor: C.coral, borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5 },
+    { label: "VQE (CUDA-Q, measured)", data: H2.R.map((r, k) => ({ x: r, y: H2.E_vqe[k] })), borderColor: C.gpu, backgroundColor: "transparent",
+      pointRadius: 3.2, pointBorderWidth: 1.5, showLine: false },
+  ]},
+  options: { responsive: true, maintainAspectRatio: false, parsing: false,
+    scales: { x: { type: "linear", min: 0.25, max: 2.55, title: { display: true, text: "R [Å]" } }, y: { title: { display: true, text: "Ha" } } },
+    plugins: { legend: { labels: { boxWidth: 10, boxHeight: 2 } }, vline: { x: H2.R[vqe.i] } } },
+});
+
+function termsHtml(terms){
+  return terms.map(([w, c]) => `<span><b>${w}</b> ${c >= 0 ? "+" : "−"}${Math.abs(c).toFixed(5)}</span>`).join("");
+}
+function updateVqe(rebuildLandscape){
+  const i = vqe.i, r = H2.R[i], terms = H2.terms[i], blk = H2.block[i];
+  const e = Phys.vqeEnergy(terms, vqe.theta, H2.n_qubits, H2.hf_index, H2.double_index);
+  const fci = H2.E_fci[i], hf = H2.E_hf[i], opt = Phys.vqeOptimum(blk);
+  const errMha = Math.abs(e - fci) * 1e3;
+  $("rVal").textContent = r.toFixed(2) + " Å";
+  $("thVal").textContent = vqe.theta.toFixed(3) + " rad";
+  $("vE").innerHTML = fmtE(e); $("vFci").innerHTML = fmtE(fci); $("vHf").innerHTML = fmtE(hf);
+  $("vErr").innerHTML = `<span class="${errMha < 1.6 ? "teal" : "coral"}">${fmtMilli(errMha)}</span> <small>mHa</small>`;
+  const corr = (hf - e) / (hf - fci);
+  $("vCorr").innerHTML = !isFinite(corr) ? "–" : corr < 0 ? '<span class="coral">above HF</span>' : (corr * 100).toFixed(1) + " %";
+  $("vTh").textContent = opt.theta.toFixed(4) + " rad";
+  if (rebuildLandscape){
+    landChart.data.datasets[0].data = thetas.map(t => ({ x: t, y: Phys.vqeEnergy(terms, t, H2.n_qubits, H2.hf_index, H2.double_index) }));
+    landChart.data.datasets[1].data = [{ x: -Math.PI / 2, y: fci }, { x: Math.PI / 2, y: fci }];
+    $("termGrid").innerHTML = termsHtml(terms);
+    pesChart.options.plugins.vline.x = r; pesChart.update("none");
+  }
+  landChart.data.datasets[2].data = [{ x: vqe.theta, y: e }];
+  landChart.update("none");
+
+  // scene: atoms at ±R/2, electron cloud stronger when the bond is well described
+  const half = r * SCALE / 2;
+  atomA.position.set(-half, 0, 0); atomB.position.set(half, 0, 0);
+  bond.scale.set(1, Math.max(r * SCALE - 1.1, 0.01), 1);
+  const bound = (H2.E_dissociation - fci) / (H2.E_dissociation - Math.min(...H2.E_fci));
+  bondMat.opacity = 0.15 + 0.75 * Math.max(0, Math.min(1, bound));
+  cloud.scale.set(half + 1.0, 0.95, 0.95); glowMat.opacity = 0.05 + 0.16 * Math.max(0, Math.min(1, bound));
+  rTag.position.set(0, 1.45, 0); setLabelText(rTag, `R = ${r.toFixed(2)} Å`, C.ink);
+  const z = Math.max(9.5, r * SCALE * 1.55 + 4);
+  vqe.cam.goal = new THREE.Vector3(0, 2.6 * z / 9.5, z); vqe.cam.goalTarget = new THREE.Vector3(0, -0.3, 0);
+  if (active === "vqe") vqe.cam.fresh = true;
+  $("caption").innerHTML = `H₂ at R = ${r.toFixed(2)} Å. Move θ to mix in the doubly excited state; the energy is exact at the bottom of the curve.`
+    + `<small>Hartree-Fock (θ = 0) misses ${((hf - fci) * 1e3).toFixed(1)} mHa here${r > 1.5 ? ", and the gap keeps growing as the bond breaks" : ""}. Chemical accuracy is 1.6 mHa.</small>`;
+}
+$("rSlider").addEventListener("input", e => { stopOpt(); vqe.i = +e.target.value; landChart.data.datasets[3].data = []; updateVqe(true); });
+$("thSlider").addEventListener("input", e => { stopOpt(); vqe.theta = +e.target.value; updateVqe(false); });
+$("hfBtn").onclick = () => { stopOpt(); vqe.theta = 0; $("thSlider").value = 0; landChart.data.datasets[3].data = []; updateVqe(false); };
+function stopOpt(){ if (vqe.anim){ clearInterval(vqe.anim); vqe.anim = null; } }
+$("optBtn").onclick = () => {
+  // Illustrative gradient descent on θ. The measured run used SciPy over all 3 UCCSD parameters.
+  stopOpt();
+  const terms = H2.terms[vqe.i], E = t => Phys.vqeEnergy(terms, t, H2.n_qubits, H2.hf_index, H2.double_index);
+  const [a, b, c] = H2.block[vqe.i], eta = 0.6 / (4 * Math.hypot((a - b) / 2, c));  // step scaled by the curvature at the minimum
+  const path = [{ x: vqe.theta, y: E(vqe.theta) }]; landChart.data.datasets[3].data = path;
+  let steps = 0;
+  const tick = () => {               // returns true when converged
+    const h = 1e-4, g = (E(vqe.theta + h) - E(vqe.theta - h)) / (2 * h);
+    vqe.theta = Math.max(-1.5708, Math.min(1.5708, vqe.theta - eta * g));
+    path.push({ x: vqe.theta, y: E(vqe.theta) }); $("thSlider").value = vqe.theta; updateVqe(false);
+    return Math.abs(g) < 1e-7 || ++steps >= 200;
+  };
+  if (REDUCED){ while (!tick()); return; }
+  vqe.anim = setInterval(() => { if (tick()) stopOpt(); }, 70);
+};
+
+/* =========================================================
+   Tabs, resize, render loop
+   ========================================================= */
+const scenes = { memory: mem, ghz, vqe };
+let active = "memory";
+function activate(tab){
+  if (!scenes[tab]) tab = "memory";
+  active = tab;
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + tab));
+  document.querySelectorAll(".hud").forEach(h => h.classList.toggle("active", h.dataset.for === tab));
+  const st = scenes[tab];
+  if (st.cam.pos){ camera.position.copy(st.cam.pos); controls.target.copy(st.cam.target); st.cam.fresh = true; }
+  if (tab === "memory") updateMemory();
+  if (tab === "ghz") refreshGhz(true);
+  if (tab === "vqe") updateVqe(true);
+  [memChart, ghzChart, landChart, pesChart].forEach(c => c.resize());
+  if (location.hash !== "#" + tab) history.replaceState(null, "", "#" + tab);
+}
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => activate(b.dataset.tab)));
+document.querySelector("nav").addEventListener("keydown", e => {
+  const tabs = [...document.querySelectorAll("nav button")], i = tabs.findIndex(t => t.dataset.tab === active);
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft"){
+    const j = (i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length; activate(tabs[j].dataset.tab); tabs[j].focus();
+  }
+});
+window.addEventListener("hashchange", () => activate(location.hash.slice(1)));
+
+function resize(){
+  const w = host.clientWidth, h = host.clientHeight;
+  renderer.setSize(w, h, false); renderer.domElement.style.width = w + "px"; renderer.domElement.style.height = h + "px";
+  camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+controls.addEventListener("start", () => { scenes[active].cam.fresh = false; });
+
+function frame(){
+  const st = scenes[active];
+  if (st.cam.fresh && st.cam.goal){           // glide to the framing chosen by the panel until the user takes over
+    const k = REDUCED ? 1 : 0.08;
+    camera.position.lerp(st.cam.goal, k); controls.target.lerp(st.cam.goalTarget, k);
+    if (camera.position.distanceTo(st.cam.goal) < 1e-3 * st.cam.goal.length()) st.cam.fresh = false;
+  }
+  controls.update();
+  st.cam.pos = camera.position.clone(); st.cam.target.copy(controls.target);
+  if (active === "ghz" && bars){
+    let moving = false;
+    for (let i = 0; i < barHeights.length; i++){
+      const d = barTargets[i] - barHeights[i];
+      if (Math.abs(d) > 1e-4){ barHeights[i] += d * 0.18; moving = true; } else barHeights[i] = barTargets[i];
+    }
+    if (moving) placeBars();
+  }
+  if (active === "memory"){
+    // keep the state label above the state cube and the device labels readable at any zoom
+    const s = mem.side, dist = camera.position.distanceTo(controls.target), k = dist * 0.022;
+    stateTag.position.set(s, 0, s);
+    stateTag.scale.set(stateTag.userData.aspect * k, k, 1);
+    devices.forEach(d => { d.tag.scale.set(d.tag.userData.aspect * k * 0.85, k * 0.85, 1); d.tag.position.set(0, d.side + k * 0.2, 0); });
+  }
+  if (active === "vqe"){ rTag.scale.set(rTag.userData.aspect * 0.42, 0.42, 1); }
+  renderer.render(st.scene, camera);
+  requestAnimationFrame(frame);
+}
+
+resetGhz();
+resize();
+activate(location.hash.slice(1) || "memory");
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

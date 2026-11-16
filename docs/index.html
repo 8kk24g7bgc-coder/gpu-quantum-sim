@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Quantum Simulation Lab · gpu-quantum-sim</title>
+<meta name="description" content="Interactive companion to gpu-quantum-sim: the memory wall of statevector simulation, a live GHZ circuit and an exact H2 VQE explorer, built on measured NVIDIA CUDA-Q results."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --bg-0:#0a0d12; --bg-1:#11151c; --bg-2:#1a2029;
+    --ink:#e6ecf4; --ink-dim:#8c99ad; --line:#23303f;
+    --accent:#ffb43a; --accent-2:#3ad1c1; --accent-3:#ff5577;
+    --cpu:#6f9be0; --gpu:#76b900;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",ui-monospace,monospace;
+    --serif:"Fraunces","Cormorant Garamond",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg-0);color:var(--ink);
+    font-family:var(--mono);font-size:14px;overflow:hidden;}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(255,180,58,0.06), transparent 40%),
+      radial-gradient(circle at 85% 82%, rgba(58,209,193,0.05), transparent 45%);}
+  .grain{position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:1;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.4'/></svg>");}
+
+  header{position:relative;z-index:3;display:flex;align-items:center;gap:28px;
+    padding:12px 24px;border-bottom:1px solid var(--line);background:rgba(10,13,18,.65);backdrop-filter:blur(14px);}
+  header h1{font-family:var(--serif);font-weight:500;font-size:22px;margin:0;white-space:nowrap;}
+  header h1 a{color:inherit;text-decoration:none}
+  nav{display:flex;gap:4px;flex:1;}
+  nav button{font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);background:transparent;
+    border:1px solid transparent;padding:7px 14px;cursor:pointer;border-radius:2px;}
+  nav button:hover{color:var(--ink);}
+  nav button[aria-selected="true"]{color:var(--ink);border-color:var(--line);background:var(--bg-1);
+    box-shadow:inset 0 -2px 0 var(--accent);}
+  .repo{color:var(--ink-dim);font-size:12px;text-decoration:none;border-bottom:1px solid var(--line);white-space:nowrap}
+  .repo:hover{color:var(--accent)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  main{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr 1fr;height:calc(100vh - 57px);}
+  .pane{position:relative;display:flex;flex-direction:column;min-height:0;}
+  .pane.left{border-right:1px solid var(--line);}
+  #three-canvas{flex:1;min-height:0;position:relative;}
+  #three-canvas canvas{display:block;}
+  .caption{position:absolute;left:18px;top:16px;right:18px;z-index:3;pointer-events:none;
+    font-family:var(--serif);font-size:15px;line-height:1.45;color:var(--ink);max-width:46ch;}
+  .caption small{display:block;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin-top:4px;line-height:1.5}
+
+  .hud{position:absolute;left:18px;bottom:18px;right:18px;z-index:3;display:none;gap:14px;align-items:flex-end;flex-wrap:wrap;
+    padding:14px 16px;border:1px solid var(--line);background:rgba(17,21,28,0.78);backdrop-filter:blur(18px);border-radius:2px;}
+  .hud.active{display:flex}
+  .group{display:flex;flex-direction:column;gap:6px;min-width:170px;flex:1;}
+  .group.tight{flex:0 0 auto;min-width:0}
+  .group label,.lbl{font-size:11px;letter-spacing:.06em;color:var(--ink-dim);}
+  .val{color:var(--accent);font-size:12px;}
+  input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line);outline:none;margin:8px 0}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--accent);border:2px solid var(--bg-0);cursor:pointer}
+  input[type="range"]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-0);cursor:pointer}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  button.b{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 13px;cursor:pointer;border-radius:2px;}
+  button.b:hover{border-color:var(--ink-dim)}
+  button.b.primary{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:700}
+  button.b:disabled{opacity:.4;cursor:default}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+  .seg button{font-family:var(--mono);font-size:12px;background:transparent;color:var(--ink-dim);border:0;padding:7px 12px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--ink)}
+
+  .panel{display:none;flex-direction:column;min-height:0;height:100%;overflow:auto;padding:18px 22px 14px}
+  .panel.active{display:flex}
+  .readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);}
+  .stat{background:var(--bg-1);padding:11px 13px;min-width:0}
+  .stat .k{font-size:11px;color:var(--ink-dim);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v small{font-size:11px;color:var(--ink-dim);font-weight:400}
+  .accent{color:var(--accent)} .teal{color:var(--accent-2)} .coral{color:var(--accent-3)}
+  .cpuc{color:var(--cpu)} .gpuc{color:var(--gpu)}
+  .chart-box{position:relative;flex:1;min-height:220px;margin-top:16px}
+  .chart-box.half{min-height:190px}
+  .chart-title{font-family:var(--serif);font-size:15px;margin:18px 0 0;color:var(--ink)}
+  .chart-title span{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-left:8px}
+  .note{font-size:11.5px;line-height:1.6;color:var(--ink-dim);margin-top:12px;max-width:72ch}
+  .badge{display:inline-block;font-size:10.5px;padding:2px 7px;border:1px solid var(--line);border-radius:2px;margin-right:6px}
+  .badge.measured{color:var(--accent-2);border-color:rgba(58,209,193,.4)}
+  .badge.live{color:var(--accent);border-color:rgba(255,180,58,.4)}
+  .gates{display:flex;flex-wrap:wrap;gap:4px;margin-top:14px}
+  .gate{font-size:11px;padding:4px 7px;border:1px solid var(--line);color:var(--ink-dim);border-radius:2px}
+  .gate.done{color:var(--accent-2);border-color:rgba(58,209,193,.45)}
+  .gate.next{color:var(--bg-0);background:var(--accent);border-color:var(--accent)}
+  .amps{margin-top:10px;font-size:12px;line-height:1.7}
+  .amps b{color:var(--accent-2);font-weight:500}
+  details.terms{margin-top:12px;font-size:11.5px;color:var(--ink-dim)}
+  details.terms summary{cursor:pointer;color:var(--ink)}
+  .term-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 16px;margin-top:8px;font-size:11.5px}
+  .term-grid span{white-space:nowrap}
+  .term-grid b{color:var(--ink);font-weight:500}
+  .empty{padding:40px;text-align:center;color:var(--ink-dim);font-family:var(--serif);font-size:16px}
+
+  @media (max-width: 960px){
+    html,body{overflow:auto;height:auto}
+    header{flex-wrap:wrap;gap:10px 18px}
+    nav{order:3;flex-basis:100%;overflow-x:auto}
+    main{grid-template-columns:1fr;height:auto}
+    .pane.left{border-right:0;border-bottom:1px solid var(--line);height:auto}
+    #three-canvas{height:46vh;flex:none}
+    .hud{position:relative;left:auto;right:auto;bottom:auto;margin:0;border-left:0;border-right:0}
+    .caption{position:relative;left:auto;top:auto;right:auto;max-width:none;padding:14px 16px 4px;font-size:14px}
+    .panel{height:auto;overflow:visible}
+    .readout{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .chart-box{min-height:240px}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header>
+  <h1><a href="#memory">Quantum Simulation Lab</a></h1>
+  <nav role="tablist" aria-label="Panels">
+    <button role="tab" id="tab-memory" aria-controls="panel-memory" aria-selected="true" data-tab="memory">Memory wall</button>
+    <button role="tab" id="tab-ghz" aria-controls="panel-ghz" aria-selected="false" data-tab="ghz">GHZ circuit</button>
+    <button role="tab" id="tab-vqe" aria-controls="panel-vqe" aria-selected="false" data-tab="vqe">H₂ VQE</button>
+  </nav>
+  <a class="repo" id="repoLink" href="#" target="_blank" rel="noopener">Code and data on GitHub</a>
+</header>
+
+<main>
+  <section class="pane left">
+    <div class="caption" id="caption"></div>
+    <div id="three-canvas" aria-hidden="true"></div>
+
+    <!-- Memory wall controls -->
+    <div class="hud active" data-for="memory">
+      <div class="group">
+        <label for="nSlider">Qubits <span class="val" id="nVal">30</span></label>
+        <input type="range" id="nSlider" min="1" max="40" step="1" value="30"/>
+      </div>
+      <div class="group tight">
+        <span class="lbl">Precision</span>
+        <div class="seg" role="group" aria-label="Precision">
+          <button id="precFp32" aria-pressed="true">fp32 · 8 B</button>
+          <button id="precFp64" aria-pressed="false">fp64 · 16 B</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GHZ controls -->
+    <div class="hud" data-for="ghz">
+      <div class="group">
+        <label for="ghzN">Qubits <span class="val" id="ghzNVal">6</span></label>
+        <input type="range" id="ghzN" min="2" max="10" step="1" value="6"/>
+      </div>
+      <div class="group">
+        <label for="shots">Shots <span class="val" id="shotsVal">1000</span></label>
+        <input type="range" id="shots" min="100" max="4000" step="100" value="1000"/>
+      </div>
+      <div class="btns">
+        <button class="b" id="stepBtn">Apply next gate</button>
+        <button class="b primary" id="runBtn">Run circuit</button>
+        <button class="b" id="sampleBtn">Measure</button>
+        <button class="b" id="ghzReset">Reset</button>
+      </div>
+    </div>
+
+    <!-- VQE controls -->
+    <div class="hud" data-for="vqe">
+      <div class="group">
+        <label for="rSlider">Bond length R <span class="val" id="rVal">0.75 Å</span></label>
+        <input type="range" id="rSlider" min="0" max="44" step="1" value="9"/>
+      </div>
+      <div class="group">
+        <label for="thSlider">Double-excitation angle θ <span class="val" id="thVal">0.000 rad</span></label>
+        <input type="range" id="thSlider" min="-1.5708" max="1.5708" step="0.0005" value="0"/>
+      </div>
+      <div class="btns">
+        <button class="b primary" id="optBtn">Find the minimum</button>
+        <button class="b" id="hfBtn">Back to Hartree-Fock</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane right">
+    <!-- Memory wall -->
+    <div class="panel active" id="panel-memory" role="tabpanel" aria-labelledby="tab-memory">
+      <div class="readout">
+        <div class="stat"><div class="k">Amplitudes 2ⁿ</div><div class="v accent" id="mAmps">–</div></div>
+        <div class="stat"><div class="k">State, fp32</div><div class="v" id="mFp32">–</div></div>
+        <div class="stat"><div class="k">State, fp64</div><div class="v" id="mFp64">–</div></div>
+        <div class="stat"><div class="k" id="mCpuK">CPU time per run</div><div class="v cpuc" id="mCpu">–</div></div>
+        <div class="stat"><div class="k" id="mGpuK">GPU time per run</div><div class="v gpuc" id="mGpu">–</div></div>
+        <div class="stat"><div class="k">GPU speedup</div><div class="v teal" id="mSpeed">–</div></div>
+      </div>
+      <h2 class="chart-title">Measured time per run <span>median of 5 runs, log scale</span></h2>
+      <div class="chart-box"><canvas id="memChart" aria-label="Measured CPU and GPU time per run versus qubits"></canvas></div>
+      <p class="note" id="memNote"></p>
+    </div>
+
+    <!-- GHZ -->
+    <div class="panel" id="panel-ghz" role="tabpanel" aria-labelledby="tab-ghz">
+      <div class="readout">
+        <div class="stat"><div class="k">Gates applied</div><div class="v accent" id="gCount">0</div></div>
+        <div class="stat"><div class="k">Amplitude updates</div><div class="v" id="gWork">0</div></div>
+        <div class="stat"><div class="k">Non-zero amplitudes</div><div class="v teal" id="gNz">1</div></div>
+      </div>
+      <div class="gates" id="gateList" aria-label="Circuit"></div>
+      <div class="amps" id="ampList"></div>
+      <h2 class="chart-title">Measurement outcomes <span id="histSub">press Measure</span></h2>
+      <div class="chart-box half"><canvas id="ghzChart" aria-label="Histogram of measured bitstrings"></canvas></div>
+      <p class="note"><span class="badge live">Live in your browser</span>A statevector of 2ⁿ amplitudes is stored in JavaScript and every gate loops over all of them: the same kind of work CUDA-Q does on 2³⁰ amplitudes at 30 qubits. Bitstrings are written q₀q₁…, as CUDA-Q prints them.</p>
+    </div>
+
+    <!-- VQE -->
+    <div class="panel" id="panel-vqe" role="tabpanel" aria-labelledby="tab-vqe">
+      <div class="readout">
+        <div class="stat"><div class="k">E(θ)</div><div class="v accent" id="vE">–</div></div>
+        <div class="stat"><div class="k">Exact FCI</div><div class="v" id="vFci">–</div></div>
+        <div class="stat"><div class="k">|E − E<sub>FCI</sub>|</div><div class="v" id="vErr">–</div></div>
+        <div class="stat"><div class="k">Hartree-Fock</div><div class="v coral" id="vHf">–</div></div>
+        <div class="stat"><div class="k">Correlation energy recovered</div><div class="v teal" id="vCorr">–</div></div>
+        <div class="stat"><div class="k">Optimal θ</div><div class="v" id="vTh">–</div></div>
+      </div>
+      <h2 class="chart-title">Energy landscape at this bond length <span>E(θ) from the 15-term Hamiltonian</span></h2>
+      <div class="chart-box half"><canvas id="landChart" aria-label="Energy versus angle theta"></canvas></div>
+      <h2 class="chart-title">Potential energy curve <span>VQE points measured with CUDA-Q</span></h2>
+      <div class="chart-box half"><canvas id="pesChart" aria-label="H2 potential energy curve"></canvas></div>
+      <details class="terms"><summary>The 15 Pauli terms of the qubit Hamiltonian at this R</summary><div class="term-grid" id="termGrid"></div></details>
+      <p class="note"><span class="badge live">Live</span>E(θ) for |ψ(θ)⟩ = cos θ |0011⟩ + sin θ |1100⟩ is computed in your browser from the real Jordan–Wigner Hamiltonian. For H₂ this one double-excitation angle is the UCCSD parameter that matters, so its minimum is exact FCI. <span class="badge measured">Measured</span>The green points are the CUDA-Q VQE run (UCCSD, 3 parameters, <span id="optName">COBYLA</span>).</p>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+<script id="data">
+/* Injected by scripts/build_viz.py from results/ — do not edit by hand. */
+const DATA = {"commit":"e12be48","repo":"https://github.com/8kk24g7bgc-coder/gpu-quantum-sim","ghz":{"cpu":{"name":"Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz","host":"n24","precision":"fp64","points":[[20,0.607575,0.0127876],[21,1.35537,0.00370865],[22,2.9483,0.00709426],[23,6.3978,0.0158474],[24,14.4278,0.230352],[25,31.353,0.0820469],[26,67.7478,0.182919],[27,146.056,0.162347],[28,314.569,0.665488],[29,675.96,1.50255],[30,1440.92,2.68684],[31,3074.2,4.93262]],"hardware":{"hostname":"n24","cpu_model":"Intel(R) Xeon(R) E-2388G CPU @ 3.20GHz","physical_cores":8,"logical_cores":16,"omp_num_threads":"8","ram_total_gb":125.18,"ram_available_gb":123.24,"gpus":[],"cudaq_gpu_count":0,"cudaq_version":"CUDA-Q Version 0.16.0 (https://github.com/NVIDIA/cuda-quantum 62fce8b862302158e0119c65e3ce57538f3af048)"}},"gpu":{"name":"Tesla T4","host":"4b530da8608c","precision":"fp32","points":[[20,0.0022739,0.000127126],[21,0.00366032,0.000124724],[22,0.00451097,0.000320805],[23,0.00750926,2.65491e-05],[24,0.0141247,4.18274e-05],[25,0.02412,0.00160165],[26,0.0492246,0.000211979],[27,0.102818,9.83145e-05],[28,0.204088,0.000149461],[29,0.423068,0.000241598],[30,0.885045,0.000525434]],"hardware":{"hostname":"4b530da8608c","cpu_model":"Intel(R) Xeon(R) CPU @ 2.00GHz","physical_cores":1,"logical_cores":2,"omp_num_threads":null,"ram_total_gb":12.67,"ram_available_gb":11.24,"gpus":[{"name":"Tesla T4","total_bytes":16106127360,"free_bytes":15634268160}],"cudaq_gpu_count":1,"cudaq_version":"CUDA-Q Version 0.16.0 (https://github.com/NVIDIA/cuda-quantum 62fce8b862302158e0119c65e3ce57538f3af048)","git_commit":"68eec70"}},"cpu_ram_gib":125.18,"gpu_mem_gib":15.0,"cpu_oom_n":32,"headroom":{"cpu":2.0,"gpu":1.5},"shots":1000,"repeats":5},"h2":{"R":[0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0,1.05,1.1,1.15,1.2,1.25,1.3,1.35,1.4,1.45,1.5,1.55,1.6,1.65,1.7,1.75,1.8,1.85,1.9,1.95,2.0,2.05,2.1,2.15,2.2,2.25,2.3,2.35,2.4,2.45,2.5],"E_vqe":[-0.6018037108,-0.7892693924,-0.9141497046,-0.998415596,-1.0551597945,-1.0926299067,-1.1162860069,-1.1299047843,-1.1361894541,-1.1371170673,-1.1341476667,-1.1283618785,-1.1205602813,-1.1113394177,-1.1011503302,-1.0903421765,-1.079192945,-1.0679296589,-1.0567407463,-1.0457831445,-1.0351862664,-1.0250543625,-1.0154682493,-1.0064869318,-0.9981493535,-0.9904763409,-0.983472729,-0.9771296162,-0.9714266885,-0.9663345448,-0.9618169528,-0.9578329679,-0.954338854,-0.9512897588,-0.9486411122,-0.9463497373,-0.9443746811,-0.9426777857,-0.9412240337,-0.9399817052,-0.938922386,-0.9380208647,-0.937254953,-0.9366052564,-0.93605492],"E_fci":[-0.6018037108,-0.7892693924,-0.9141497046,-0.998415596,-1.0551597945,-1.0926299067,-1.1162860069,-1.1299047843,-1.1361894541,-1.1371170673,-1.1341476667,-1.1283618785,-1.1205602813,-1.1113394177,-1.1011503302,-1.0903421765,-1.079192945,-1.0679296589,-1.0567407463,-1.0457831445,-1.0351862664,-1.0250543625,-1.0154682493,-1.0064869318,-0.9981493535,-0.9904763409,-0.983472729,-0.9771296162,-0.9714266885,-0.9663345448,-0.9618169528,-0.9578329679,-0.954338854,-0.9512897588,-0.9486411122,-0.9463497373,-0.9443746811,-0.9426777857,-0.9412240337,-0.9399817052,-0.938922386,-0.9380208647,-0.937254953,-0.9366052564,-0.93605492],"E_hf":[-0.5938277585,-0.7804549021,-0.9043613942,-0.9875131377,-1.0429962745,-1.0790507362,-1.1011282423,-1.1129965457,-1.117349035,-1.1161514489,-1.1108503975,-1.1025105539,-1.091914041,-1.0796369282,-1.0661086493,-1.0516567556,-1.036538875,-1.0209641436,-1.0051067066,-0.9891138141,-0.9731106158,-0.9572031751,-0.9414806547,-0.9260171757,-0.9108735546,-0.8960989583,-0.8817324499,-0.867804384,-0.854337627,-0.8413485985,-0.8288481479,-0.8168422923,-0.8053328449,-0.7943179655,-0.7837926543,-0.7737492084,-0.7641776516,-0.7550661408,-0.74640135,-0.7381688272,-0.7303533214,-0.722939072,-0.7159100605,-0.7092502192,-0.7029435997],"terms":[[["IIII",1.300723860111],["ZIII",0.258691543015],["IZII",0.258691543015],["IIZI",-0.549957366894],["IIIZ",-0.549957366894],["ZZII",0.188004638994],["ZIZI",0.145270887959],["ZIIZ",0.18547551776],["IZZI",0.18547551776],["IZIZ",0.145270887959],["IIZZ",0.196234373616],["XXYY",-0.040204629801],["XYYX",0.040204629801],["YXXY",0.040204629801],["YYXX",-0.040204629801]],[["IIII",0.986935266224],["ZIII",0.246791982735],["IZII",0.246791982735],["IIZI",-0.500623839826],["IIIZ",-0.500623839826],["ZZII",0.18619133805],["ZIZI",0.142831079339],["ZIIZ",0.18347438553],["IZZI",0.18347438553],["IZIZ",0.142831079339],["IIZZ",0.193861068513],["XXYY",-0.040643306191],["XYYX",0.040643306191],["YXXY",0.040643306191],["YYXX",-0.040643306191]],[["IIII",0.740772501753],["ZIII",0.235288243237],["IZII",0.235288243237],["IIZI",-0.453531186327],["IIIZ",-0.453531186327],["ZZII",0.184219838224],["ZIZI",0.140204503062],["ZIIZ",0.181333359067],["IZZI",0.181333359067],["IZIZ",0.140204503062],["IIZZ",0.191360849247],["XXYY",-0.041128856006],["XYYX",0.041128856006],["YXXY",0.041128856006],["YYXX",-0.041128856006]],[["IIII",0.542433479568],["ZIII",0.224324018783],["IZII",0.224324018783],["IIZI",-0.409565763976],["IIIZ",-0.409565763976],["ZZII",0.182122161486],["ZIZI",0.137443127381],["ZIIZ",0.179098477663],["IZZI",0.179098477663],["IZIZ",0.137443127381],["IIZZ",0.188793996845],["XXYY",-0.041655350281],["XYYX",0.041655350281],["YXXY",0.041655350281],["YYXX",-0.041655350281]],[["IIII",0.379831351781],["ZIII",0.213935310245],["IZII",0.213935310245],["IIZI",-0.369144315244],["IIIZ",-0.369144315244],["ZZII",0.179926509764],["ZIZI",0.134592403464],["ZIIZ",0.176809960386],["IZZI",0.176809960386],["IZIZ",0.134592403464],["IIZZ",0.186209842592],["XXYY",-0.042217556922],["XYYX",0.042217556922],["YXXY",0.042217556922],["YYXX",-0.042217556922]],[["IIII",0.245006509065],["ZIII",0.204106620855],["IZII",0.204106620855],["IIZI",-0.332382163734],["IIIZ",-0.332382163734],["ZZII",0.177657084186],["ZIZI",0.13169001486],["ZIIZ",0.174501144202],["IZZI",0.174501144202],["IZIZ",0.13169001486],["IIZZ",0.183645557873],["XXYY",-0.042811129341],["XYYX",0.042811129341],["YXXY",0.042811129341],["YYXX",-0.042811129341]],[["IIII",0.132366168028],["ZIII",0.19480867735],["IZII",0.19480867735],["IIZI",-0.299205109236],["IIIZ",-0.299205109236],["ZZII",0.175334432288],["ZIZI",0.128765613415],["ZIIZ",0.172198274352],["IZZI",0.172198274352],["IZIZ",0.128765613415],["IIZZ",0.181126506123],["XXYY",-0.043432660936],["XYYX",0.043432660936],["YXXY",0.043432660936],["YYXX",-0.043432660936]],[["IIII",0.037751103946],["ZIII",0.186016488862],["IZII",0.186016488862],["IIZI",-0.269416931416],["IIIZ",-0.269416931416],["ZZII",0.172976101307],["ZIZI",0.12584136558],["ZIIZ",0.169920978483],["IZZI",0.169920978483],["IZIZ",0.12584136558],["IIZZ",0.17866777776],["XXYY",-0.044079612903],["XYYX",0.044079612903],["YXXY",0.044079612903],["YYXX",-0.044079612903]],[["IIII",-0.042078976478],["ZIII",0.177712874651],["IZII",0.177712874651],["IIZI",-0.242742805131],["IIIZ",-0.242742805131],["ZZII",0.170597383288],["ZIZI",0.122933050562],["ZIIZ",0.167683194577],["IZZI",0.167683194577],["IZIZ",0.122933050562],["IIZZ",0.176276408043],["XXYY",-0.044750144015],["XYYX",0.044750144015],["YXXY",0.044750144015],["YYXX",-0.044750144015]],[["IIII",-0.109730556067],["ZIII",0.169884520279],["IZII",0.169884520279],["IIZI",-0.218863067812],["IIIZ",-0.218863067812],["ZZII",0.168211986737],["ZIZI",0.120051430725],["ZIIZ",0.16549431487],["IZZI",0.16549431487],["IZIZ",0.120051430725],["IIZZ",0.173953787765],["XXYY",-0.045442884144],["XYYX",0.045442884144],["YXXY",0.045442884144],["YYXX",-0.045442884144]],[["IIII",-0.167333989057],["ZIII",0.162516487489],["IZII",0.162516487489],["IIZI",-0.197442936998],["IIIZ",-0.197442936998],["ZZII",0.165832537216],["ZIZI",0.117203647202],["ZIIZ",0.163360343091],["IZZI",0.163360343091],["IZIZ",0.117203647202],["IIZZ",0.171697883923],["XXYY",-0.046156695889],["XYYX",0.046156695889],["YXXY",0.046156695889],["YYXX",-0.046156695889]],[["IIII",-0.216634711325],["ZIII",0.155588611752],["IZII",0.155588611752],["IIZI",-0.178157883227],["IIIZ",-0.178157883227],["ZZII",0.163470874535],["ZIZI",0.114394460451],["ZIIZ",0.161284922431],["IZZI",0.161284922431],["IZIZ",0.114394460451],["IIZZ",0.169505038589],["XXYY",-0.04689046198],["XYYX",0.04689046198],["YXXY",0.04689046198],["YYXX",-0.04689046198]],[["IIII",-0.259054122213],["ZIII",0.149074788447],["IZII",0.149074788447],["IIZI",-0.160712491081],["IIIZ",-0.160712491081],["ZZII",0.161138163782],["ZIZI",0.111627234034],["ZIIZ",0.159270157474],["IZZI",0.159270157474],["IZIZ",0.111627234034],["IIZZ",0.167371259483],["XXYY",-0.04764292344],["XYYX",0.04764292344],["YXXY",0.04764292344],["YYXX",-0.04764292344]],[["IIII",-0.29573915649],["ZIII",0.14294455151],["IZII",0.14294455151],["IIZI",-0.144851438429],["IIIZ",-0.144851438429],["ZZII",0.158844866117],["ZIZI",0.108904631032],["ZIIZ",0.157317210279],["IZZI",0.157317210279],["IZIZ",0.108904631032],["IIZZ",0.165293024662],["XXYY",-0.048412579246],["XYYX",0.048412579246],["YXXY",0.048412579246],["YYXX",-0.048412579246]],[["IIII",-0.327608189675],["ZIII",0.137165729371],["IZII",0.137165729371],["IIZI",-0.130362920571],["IIIZ",-0.130362920571],["ZZII",0.156600624882],["ZIZI",0.106229044909],["ZIIZ",0.15542669078],["IZZI",0.15542669078],["IZIZ",0.106229044909],["IIZZ",0.163267686736],["XXYY",-0.049197645871],["XYYX",0.049197645871],["YXXY",0.049197645871],["YYXX",-0.049197645871]],[["IIII",-0.355394479724],["ZIII",0.131707063028],["IZII",0.131707063028],["IIZI",-0.117076226727],["IIIZ",-0.117076226727],["ZZII",0.154414118443],["ZIZI",0.103602816639],["ZIIZ",0.153598883273],["IZZI",0.153598883273],["IZIZ",0.103602816639],["IIZZ",0.16129358497],["XXYY",-0.049996066634],["XYYX",0.049996066634],["YXXY",0.049996066634],["YYXX",-0.049996066634]],[["IIII",-0.379685695252],["ZIII",0.126540109489],["IZII",0.126540109489],["IIZI",-0.104855767656],["IIIZ",-0.104855767656],["ZZII",0.152292919634],["ZIZI",0.101028300275],["ZIIZ",0.15183385693],["IZZI",0.15183385693],["IZIZ",0.101028300275],["IIZZ",0.159369969289],["XXYY",-0.050805556655],["XYYX",0.050805556655],["YXXY",0.050805556655],["YYXX",-0.050805556655]],[["IIII",-0.400957799706],["ZIII",0.121640220489],["IZII",0.121640220489],["IIZI",-0.093593716654],["IIIZ",-0.093593716654],["ZZII",0.150243387931],["ZIZI",0.098507835407],["ZIIZ",0.150131504113],["IZZI",0.150131504113],["IZIZ",0.098507835407],["IIZZ",0.157496821521],["XXYY",-0.051623668706],["XYYX",0.051623668706],["YXXY",0.051623668706],["YYXX",-0.051623668706]],[["IIII",-0.41960236805],["ZIII",0.116986714353],["IZII",0.116986714353],["IIZI",-0.083202862416],["IIIZ",-0.083202862416],["ZZII",0.148270607853],["ZIZI",0.096043673704],["ZIIZ",0.14849154086],["IZZI",0.14849154086],["IZIZ",0.096043673704],["IIZZ",0.155674636296],["XXYY",-0.052447867156],["XYYX",0.052447867156],["YXXY",0.052447867156],["YYXX",-0.052447867156]],[["IIII",-0.43594741538],["ZIII",0.112562509579],["IZII",0.112562509579],["IIZI",-0.073610593621],["IIIZ",-0.073610593621],["ZZII",0.146378377382],["ZIZI",0.0936378929],["ZIIZ",0.146913493228],["IZZI",0.146913493228],["IZIZ",0.0936378929],["IIZZ",0.153904202563],["XXYY",-0.053275600329],["XYYX",0.053275600329],["YXXY",0.053275600329],["YYXX",-0.053275600329]],[["IIII",-0.450272557904],["ZIII",0.108353499703],["IZII",0.108353499703],["IIZI",-0.064754353259],["IIIZ",-0.064754353259],["ZZII",0.144569243421],["ZIZI",0.091292318795],["ZIIZ",0.145396683701],["IZZI",0.145396683701],["IZIZ",0.091292318795],["IIZZ",0.152186409619],["XXYY",-0.054104364906],["XYYX",0.054104364906],["YXXY",0.054104364906],["YYXX",-0.054104364906]],[["IIII",-0.46281968069],["ZIII",0.104347883208],["IZII",0.104347883208],["IIZI",-0.056578506882],["IIIZ",-0.056578506882],["ZZII",0.142844577328],["ZIZI",0.089008465713],["ZIIZ",0.143940224647],["IZZI",0.143940224647],["IZIZ",0.089008465713],["IIZZ",0.150522089188],["XXYY",-0.054931758934],["XYYX",0.054931758934],["YXXY",0.054931758934],["YYXX",-0.054931758934]],[["IIII",-0.473800315961],["ZIII",0.100535574354],["IZII",0.100535574354],["IIZI",-0.049032364415],["IIIZ",-0.049032364415],["ZZII",0.141204681514],["ZIZI",0.086787498788],["ZIIZ",0.142543021057],["IZZI",0.142543021057],["IZIZ",0.086787498788],["IIZZ",0.148911896966],["XXYY",-0.055755522269],["XYYX",0.055755522269],["YXXY",0.055755522269],["YYXX",-0.055755522269]],[["IIII",-0.483400768191],["ZIII",0.09690774496],["IZII",0.09690774496],["IIZI",-0.042069034452],["IIIZ",-0.042069034452],["ZZII",0.139648917457],["ZIZI",0.084630217148],["ZIIZ",0.141203781984],["IZZI",0.141203781984],["IZIZ",0.084630217148],["IIZZ",0.147356232086],["XXYY",-0.056573564836],["XYYX",0.056573564836],["YXXY",0.056573564836],["YYXX",-0.056573564836]],[["IIII",-0.491785777304],["ZIII",0.093456496677],["IZII",0.093456496677],["IIZI",-0.03564481621],["IIIZ",-0.03564481621],["ZZII",0.138175845766],["ZIZI",0.082537054888],["ZIIZ",0.139921038903],["IZZI",0.139921038903],["IZIZ",0.082537054888],["IIZZ",0.145855190301],["XXYY",-0.057383984015],["XYYX",0.057383984015],["YXXY",0.057383984015],["YYXX",-0.057383984015]],[["IIII",-0.499101269566],["ZIII",0.090174638008],["IZII",0.090174638008],["IIZI",-0.029718899356],["IIIZ",-0.029718899356],["ZZII",0.136783369808],["ZIZI",0.08050809586],["ZIIZ",0.138693168765],["IZZI",0.138693168765],["IZIZ",0.08050809586],["IIZZ",0.14440854541],["XXYY",-0.058185072904],["XYYX",0.058185072904],["YXXY",0.058185072904],["YYXX",-0.058185072904]],[["IIII",-0.505476547979],["ZIII",0.087055533581],["IZII",0.087055533581],["IIZI",-0.024253213727],["IIIZ",-0.024253213727],["ZZII",0.135468875715],["ZIZI",0.078543098381],["ZIIZ",0.137518419731],["IZZI",0.137518419731],["IZIZ",0.078543098381],["IIZZ",0.143015753157],["XXYY",-0.05897532135],["XYYX",0.05897532135],["YXXY",0.05897532135],["YYXX",-0.05897532135]],[["IIII",-0.511026131127],["ZIII",0.084092997055],["IZII",0.084092997055],["IIZI",-0.019212332674],["IIIZ",-0.019212332674],["ZZII",0.134229363054],["ZIZI",0.076641526358],["ZIIZ",0.136394937879],["IZZI",0.136394937879],["IZIZ",0.076641526358],["IIZZ",0.141675972004],["XXYY",-0.059753411521],["XYYX",0.059753411521],["YXXY",0.059753411521],["YYXX",-0.059753411521]],[["IIII",-0.515851356271],["ZIII",0.081281207267],["IZII",0.081281207267],["IIZI",-0.014563379422],["IIIZ",-0.014563379422],["ZZII",0.133061562095],["ZIZI",0.074802583959],["ZIIZ",0.135320793588],["IZZI",0.135320793588],["IZIZ",0.074802583959],["IIZZ",0.140388095698],["XXYY",-0.06051820963],["XYYX",0.06051820963],["YXXY",0.06051820963],["YYXX",-0.06051820963]],[["IIII",-0.520041807061],["ZIII",0.078614635809],["IZII",0.078614635809],["IIZI",-0.010275915853],["IIIZ",-0.010275915853],["ZZII",0.131962035175],["ZIZI",0.073025251553],["ZIIZ",0.134294006669],["IZZI",0.134294006669],["IZIZ",0.073025251553],["IIZZ",0.1391507932],["XXYY",-0.061268755116],["XYYX",0.061268755116],["YXXY",0.061268755116],["YYXX",-0.061268755116]],[["IIII",-0.523676596427],["ZIII",0.076087981016],["IZII",0.076087981016],["IIZI",-0.006321810573],["IIIZ",-0.006321810573],["ZZII",0.13092726107],["ZIZI",0.071308321223],["ZIIZ",0.133312569593],["IZZI",0.133312569593],["IZIZ",0.071308321223],["IIZZ",0.137962552239],["XXYY",-0.06200424837],["XYYX",0.06200424837],["YXXY",0.06200424837],["YYXX",-0.06200424837]],[["IIII",-0.526825521019],["ZIII",0.073696107902],["IZII",0.073696107902],["IIZI",-0.002675091685],["IIIZ",-0.002675091685],["ZZII",0.129953702574],["ZIZI",0.069650430626],["ZIIZ",0.132374468443],["IZZI",0.132374468443],["IZIZ",0.069650430626],["IIZZ",0.136821723505],["XXYY",-0.062724037817],["XYYX",0.062724037817],["YXXY",0.062724037817],["YYXX",-0.062724037817]],[["IIII",-0.529550097912],["ZIII",0.071433995872],["IZII",0.071433995872],["IIZI",0.000688207355],["IIIZ",0.000688207355],["ZZII",0.129037858373],["ZIZI",0.068050094391],["ZIIZ",0.131477701345],["IZZI",0.131477701345],["IZIZ",0.068050094391],["IIZZ",0.135726563151],["XXYY",-0.063427606953],["XYYX",0.063427606953],["YXXY",0.063427606953],["YYXX",-0.063427606953]],[["IIII",-0.531904492785],["ZIII",0.069296696679],["IZII",0.069296696679],["IIZI",0.003790200711],["IIIZ",0.003790200711],["ZZII",0.12817630101],["ZIZI",0.066505732557],["ZIIZ",0.130620294312],["IZZI",0.130620294312],["IZIZ",0.066505732557],["IIZZ",0.134675271935],["XXYY",-0.064114561755],["XYYX",0.064114561755],["YXXY",0.064114561755],["YYXX",-0.064114561755]],[["IIII",-0.533936348773],["ZIII",0.06727930459],["IZII",0.06727930459],["IIZI",0.006651295688],["IIIZ",0.006651295688],["ZZII",0.127365703107],["ZIZI",0.065015695812],["ZIIZ",0.129800314532],["IZZI",0.129800314532],["IZIZ",0.065015695812],["IIZZ",0.133666029882],["XXYY",-0.06478461872],["XYYX",0.06478461872],["YXXY",0.06478461872],["YYXX",-0.06478461872]],[["IIII",-0.535687525455],["ZIII",0.065376939612],["IZII",0.065376939612],["IIZI",0.009290326856],["IIIZ",0.009290326856],["ZZII",0.12660285414],["ZIZI",0.063578287503],["ZIIZ",0.129015881196],["IZZI",0.129015881196],["IZIZ",0.063578287503],["IIZZ",0.132697025819],["XXYY",-0.065437593692],["XYYX",0.065437593692],["YXXY",0.065437593692],["YYXX",-0.065437593692]],[["IIII",-0.537194757394],["ZIII",0.063584743378],["IZII",0.063584743378],["IIZI",0.011724677021],["IIIZ",0.011724677021],["ZZII",0.125884670021],["ZIZI",0.06219178251],["ZIIZ",0.12826517403],["IZZI",0.12826517403],["IZIZ",0.06219178251],["IIZZ",0.13176648155],["XXYY",-0.06607339152],["XYYX",0.06607339152],["YXXY",0.06607339152],["YYXX",-0.06607339152]],[["IIII",-0.538490241157],["ZIII",0.061897886096],["IZII",0.061897886096],["IIZI",0.013970385069],["IIIZ",0.013970385069],["ZZII",0.12520819751],["ZIZI",0.060854443191],["ZIIZ",0.127546439753],["IZZI",0.127546439753],["IZIZ",0.060854443191],["IIZZ",0.130872670741],["XXYY",-0.066691996562],["XYYX",0.066691996562],["YXXY",0.066691996562],["YYXX",-0.066691996562]],[["IIII",-0.539602159001],["ZIII",0.060311582136],["IZII",0.060311582136],["IIZI",0.016042241959],["IIIZ",0.016042241959],["ZZII",0.1245706152],["ZIZI",0.059564532673],["ZIIZ",0.126857996657],["IZZI",0.126857996657],["IZIZ",0.059564532673],["IIZZ",0.130013932824],["XXYY",-0.067293463985],["XYYX",0.067293463985],["YXXY",0.067293463985],["YYXX",-0.067293463985]],[["IIII",-0.54055514637],["ZIII",0.058821111344],["IZII",0.058821111344],["IIZI",0.017953876828],["IIIZ",0.017953876828],["ZZII",0.123969232457],["ZIZI",0.058320325776],["ZIIZ",0.126198237571],["IZZI",0.126198237571],["IZIZ",0.058320325776],["IIZZ",0.129188682394],["XXYY",-0.067877911796],["XYYX",0.067877911796],["YXXY",0.067877911796],["YYXX",-0.067877911796]],[["IIII",-0.541370709411],["ZIII",0.057421843072],["IZII",0.057421843072],["IIZI",0.019717835404],["IIIZ",0.019717835404],["ZZII",0.12340148737],["ZIZI",0.057120117894],["ZIIZ",0.12556563143],["IZZI",0.12556563143],["IZIZ",0.057120117894],["IIZZ",0.128395414668],["XXYY",-0.068445513535],["XYYX",0.068445513535],["YXXY",0.068445513535],["YYXX",-0.068445513535]],[["IIII",-0.542067597723],["ZIII",0.056109260167],["IZII",0.056109260167],["IIZI",0.021345652823],["IIIZ",0.021345652823],["ZZII",0.122864944399],["ZIZI",0.055962232122],["ZIIZ",0.124958723674],["IZZI",0.124958723674],["IZIZ",0.055962232122],["IIZZ",0.127632707634],["XXYY",-0.068996491552],["XYYX",0.068996491552],["YXXY",0.068996491552],["YYXX",-0.068996491552]],[["IIII",-0.542662136822],["ZIII",0.05487898064],["IZII",0.05487898064],["IIZI",0.022847922583],["IIIZ",0.022847922583],["ZZII",0.12235729218],["ZIZI",0.054845024912],["ZIIZ",0.124376135699],["IZZI",0.124376135699],["IZIZ",0.054845024912],["IIZZ",0.126899221523],["XXYY",-0.069531110787],["XYYX",0.069531110787],["YXXY",0.069531110787],["YYXX",-0.069531110787]],[["IIII",-0.543168524149],["ZIII",0.053726775354],["IZII",0.053726775354],["IIZI",0.024234362913],["IIIZ",0.024234362913],["ZZII",0.121876341667],["ZIZI",0.053766890511],["ZIIZ",0.123816563529],["IZZI",0.123816563529],["IZIZ",0.053766890511],["IIZZ",0.126193696204],["XXYY",-0.070049673018],["XYYX",0.070049673018],["YXXY",0.070049673018],["YYXX",-0.070049673018]],[["IIII",-0.54359909202],["ZIII",0.052648580736],["IZII",0.052648580736],["IIZI",0.02551388131],["IIIZ",0.02551388131],["ZZII",0.121420024659],["ZIZI",0.052726264397],["ZIIZ",0.12327877589],["IZZI",0.12327877589],["IZIZ",0.052726264397],["IIZZ",0.125514947063],["XXYY",-0.070552511494],["XYYX",0.070552511494],["YXXY",0.070552511494],["YYXX",-0.070552511494]]],"block":[[-0.5938277585357274,2.64076788110012,0.16081851920392953],[-0.7804549020715261,2.209208388170976,0.16257322476428376],[-0.9043613941635391,1.8509163240944309,0.16451542402256553],[-0.9875131377072354,1.5480459933287767,0.16662140112466878],[-1.0429962745400945,1.2893222274158203,0.16887022768973525],[-1.0790507361774568,1.0669044021780252,0.1712445173649529],[-1.101128242267702,0.8749269040777585,0.17373064374565864],[-1.1129965456691675,0.7087371354453351,0.17631845161020712],[-1.117349034990279,0.5644736841409383,0.1790005760614065],[-1.1161514489386015,0.43883890342779797,0.18177153657730483],[-1.1108503974765942,0.32898730046850355,0.18462678355606119],[-1.1025105539245945,0.23247542599402327,0.1875618479187799],[-1.0919140410200572,0.14723507709189476,0.19057169375926486],[-1.0796369282103728,0.07154703154391659,0.193650316985244],[-1.0661086493179368,0.004005950450407442,0.1967905834854701],[-1.0516567556468372,-0.056523596626108924,0.19998426653596663],[-1.03653887502918,-0.11095536644841478,0.20322222662064954],[-1.0209641435798944,-0.1600283950081841,0.20649467482415507],[-1.0051067065684895,-0.20434839949025485,0.20979146862244538],[-0.9891138140908918,-0.24442140129106094,0.21310240131415087],[-0.973110615777578,-0.2806792039302085,0.21641745962374725],[-0.9572031750747296,-0.3134976147156854,0.2197270357359388],[-0.941480654707798,-0.3432088996324183,0.22302208907471477],[-0.926017175738151,-0.37011005808809994,0.22629425934361339],[-0.9108735545943863,-0.3944683030459424,0.2295359360597018],[-0.896098958324941,-0.4165248088714756,0.23274029161766463],[-0.8817324499460564,-0.4364974607127709,0.2359012853985082],[-0.8678043840012173,-0.45458306508321633,0.2390136460834125],[-0.8543376269512915,-0.47095928019261657,0.2420728385191093],[-0.8413485984542795,-0.48578639180471667,0.24507502046287877],[-0.8288481479269774,-0.49920898157103955,0.2480169934795392],[-0.8168422922508727,-0.511357493904268,0.25089615126773823],[-0.8053328448932777,-0.5223496908280914,0.2537104278126142],[-0.7943179655149311,-0.5322919816415261,0.25645824701932673],[-0.7837926542773533,-0.5412806186683142,0.2591384748810567],[-0.7737492084058433,-0.5494027573820162,0.2617503747683464],[-0.7641776516167971,-0.556737386189138,0.2642935660795622],[-0.7550661408488434,-0.5633561367415164,0.2667679862476797],[-0.7464013499911589,-0.5693239892837507,0.2691738559384851],[-0.7381688272448947,-0.5746998891811304,0.2715116471825282],[-0.7303533213548871,-0.5795372906849489,0.2737820541416617],[-0.7229390719684011,-0.5838846425936816,0.27598596620721694],[-0.7159100604538066,-0.5877858282259203,0.278124443148795],[-0.7092502192393471,-0.5912805694736663,0.28019869207028936],[-0.7029435997235269,-0.5944048020199362,0.2822100459753861]],"hf_index":3,"double_index":12,"n_qubits":4,"R_eq":0.7348640988476763,"E_min":-1.1373060512210327,"E_dissociation":-0.9331636991145507,"max_error_mHa":2.0028423364237824e-10,"optimizer":"cobyla"}};
+</script>
+
+<script id="physics">
+/* ============================================================
+   Physics core (no DOM). Also exercised by tests/test_viz.py
+   through Node, against the Python reference values.
+   ============================================================ */
+const Phys = (() => {
+  const GIB = 1024 ** 3;
+
+  function stateBytes(n, bytesPerAmp){ return Math.pow(2, n) * bytesPerAmp; }
+
+  /* --- Statevector simulator (qubit k = bit k of the index, as in CUDA-Q) --- */
+  function zeroState(n){
+    const dim = 1 << n, re = new Float64Array(dim), im = new Float64Array(dim);
+    re[0] = 1; return { n, re, im };
+  }
+  function applyH(s, q){
+    const m = 1 << q, r = Math.SQRT1_2, { re, im } = s;
+    for (let i = 0; i < re.length; i++){
+      if (i & m) continue;
+      const j = i | m, ar = re[i], ai = im[i], br = re[j], bi = im[j];
+      re[i] = r * (ar + br); im[i] = r * (ai + bi);
+      re[j] = r * (ar - br); im[j] = r * (ai - bi);
+    }
+  }
+  function applyCX(s, c, t){
+    const mc = 1 << c, mt = 1 << t, { re, im } = s;
+    for (let i = 0; i < re.length; i++){
+      if (!(i & mc) || (i & mt)) continue;
+      const j = i | mt;
+      let x = re[i]; re[i] = re[j]; re[j] = x;
+      x = im[i]; im[i] = im[j]; im[j] = x;
+    }
+  }
+  function ghzGates(n){
+    const g = [{ op: "H", q: 0 }];
+    for (let i = 0; i < n - 1; i++) g.push({ op: "CX", c: i, t: i + 1 });
+    return g;
+  }
+  function applyGate(s, g){ g.op === "H" ? applyH(s, g.q) : applyCX(s, g.c, g.t); }
+  function probabilities(s){
+    const p = new Float64Array(s.re.length);
+    for (let i = 0; i < p.length; i++) p[i] = s.re[i] ** 2 + s.im[i] ** 2;
+    return p;
+  }
+  function bitstring(i, n){ let b = ""; for (let k = 0; k < n; k++) b += (i >> k) & 1; return b; }
+  function sample(p, shots, rand = Math.random){
+    const cdf = new Float64Array(p.length); let acc = 0;
+    for (let i = 0; i < p.length; i++){ acc += p[i]; cdf[i] = acc; }
+    const counts = new Map();
+    for (let s = 0; s < shots; s++){
+      const u = rand() * acc; let lo = 0, hi = cdf.length - 1;
+      while (lo < hi){ const mid = (lo + hi) >> 1; if (cdf[mid] < u) lo = mid + 1; else hi = mid; }
+      counts.set(lo, (counts.get(lo) || 0) + 1);
+    }
+    return counts;
+  }
+
+  /* --- Pauli-string expectation value <psi|P|psi> --- */
+  function applyPauliWord(word, re, im){
+    const dim = re.length, ore = new Float64Array(dim), oim = new Float64Array(dim);
+    for (let i = 0; i < dim; i++){
+      if (re[i] === 0 && im[i] === 0) continue;
+      let j = i, pr = 1, pi = 0;                     // phase = pr + i*pi
+      for (let k = 0; k < word.length; k++){
+        const ch = word[k], bit = (i >> k) & 1;
+        if (ch === "X"){ j ^= (1 << k); }
+        else if (ch === "Y"){ j ^= (1 << k);           // Y|0> = i|1>, Y|1> = -i|0>
+          const s = bit ? -1 : 1; const nr = -pi * s, ni = pr * s; pr = nr; pi = ni; }
+        else if (ch === "Z"){ if (bit){ pr = -pr; pi = -pi; } }
+      }
+      ore[j] += pr * re[i] - pi * im[i];
+      oim[j] += pr * im[i] + pi * re[i];
+    }
+    return [ore, oim];
+  }
+  function expectation(terms, re, im){
+    let e = 0;
+    for (const [word, c] of terms){
+      const [pr, pi] = applyPauliWord(word, re, im);
+      for (let i = 0; i < re.length; i++) e += c * (re[i] * pr[i] + im[i] * pi[i]);
+    }
+    return e;
+  }
+  function vqeState(theta, nq, hfIdx, dblIdx){
+    const dim = 1 << nq, re = new Float64Array(dim), im = new Float64Array(dim);
+    re[hfIdx] = Math.cos(theta); re[dblIdx] = Math.sin(theta);
+    return [re, im];
+  }
+  function vqeEnergy(terms, theta, nq, hfIdx, dblIdx){
+    const [re, im] = vqeState(theta, nq, hfIdx, dblIdx);
+    return expectation(terms, re, im);
+  }
+  /* closed form of the same E(theta): (A+B)/2 + (A-B)/2 cos 2θ + C sin 2θ */
+  function vqeOptimum(block){
+    const [a, b, c] = block;
+    const theta = 0.5 * Math.atan2(2 * c, a - b) + Math.PI / 2;
+    const wrap = Math.atan2(Math.sin(2 * theta), Math.cos(2 * theta)) / 2;
+    const e = 0.5 * (a + b) - Math.hypot(0.5 * (a - b), c);
+    return { theta: wrap, energy: e };
+  }
+
+  return { GIB, stateBytes, zeroState, applyH, applyCX, ghzGates, applyGate,
+           probabilities, bitstring, sample, applyPauliWord, expectation,
+           vqeState, vqeEnergy, vqeOptimum };
+})();
+if (typeof module !== "undefined") module.exports = Phys;
+</script>
+
+<script id="app">
+(() => {
+if (typeof document === "undefined") return;
+const $ = id => document.getElementById(id);
+const css = getComputedStyle(document.documentElement);
+const C = {
+  ink: css.getPropertyValue("--ink").trim(), dim: css.getPropertyValue("--ink-dim").trim(),
+  line: css.getPropertyValue("--line").trim(), accent: css.getPropertyValue("--accent").trim(),
+  teal: css.getPropertyValue("--accent-2").trim(), coral: css.getPropertyValue("--accent-3").trim(),
+  cpu: css.getPropertyValue("--cpu").trim(), gpu: css.getPropertyValue("--gpu").trim(),
+};
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+if (!DATA || typeof THREE === "undefined" || typeof Chart === "undefined"){
+  document.querySelector("main").innerHTML = '<div class="empty">' + (!DATA
+    ? "No data embedded. Run <code>python scripts/build_viz.py</code> to build this page."
+    : "Three.js or Chart.js could not be loaded. Check your connection and reload.") + "</div>";
+  return;
+}
+$("repoLink").href = DATA.repo;
+$("optName").textContent = { cobyla: "COBYLA", lbfgsb: "L-BFGS-B" }[DATA.h2.optimizer] || DATA.h2.optimizer;
+
+/* ---------------- formatting ---------------- */
+function fmtBytes(b){
+  const u = ["B","KiB","MiB","GiB","TiB","PiB"]; let i = 0;
+  while (b >= 1024 && i < u.length - 1){ b /= 1024; i++; }
+  return (b >= 100 || Number.isInteger(b) ? b.toFixed(0) : b.toFixed(b >= 10 ? 1 : 2)) + " " + u[i];
+}
+function fmtTime(s){
+  if (s < 1e-3) return (s * 1e6).toFixed(0) + " µs";
+  if (s < 1) return (s * 1e3).toFixed(s < 0.01 ? 2 : 1) + " ms";
+  if (s < 60) return s.toFixed(2) + " s";
+  if (s < 3600) return (s / 60).toFixed(1) + " min";
+  return (s / 3600).toFixed(2) + " h";
+}
+const fmtInt = x => x.toLocaleString("en-US");
+const fmtE = e => (e < 0 ? "−" : "") + Math.abs(e).toFixed(6) + " <small>Ha</small>";
+function fmtMilli(x){
+  if (x === 0) return "0";
+  if (x >= 0.01) return x.toFixed(x < 1 ? 3 : 2);
+  const e = Math.floor(Math.log10(x)), m = x / 10 ** e;
+  const sup = String(e).replace(/-/g, "⁻").replace(/\d/g, d => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]);
+  return m.toFixed(1) + "×10" + sup;
+}
+
+/* ---------------- Three.js shell ---------------- */
+const host = $("three-canvas");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+host.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 5000);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+
+function makeScene(){
+  const s = new THREE.Scene();
+  s.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const d = new THREE.DirectionalLight(0xffffff, 0.75); d.position.set(4, 8, 6); s.add(d);
+  const d2 = new THREE.DirectionalLight(0x3ad1c1, 0.25); d2.position.set(-6, -2, -4); s.add(d2);
+  return s;
+}
+function label(text, color = C.ink, size = 44){
+  const cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+  ctx.font = `500 ${size}px JetBrains Mono, monospace`;
+  const w = Math.ceil(ctx.measureText(text).width) + 24, h = size + 22;
+  cv.width = w; cv.height = h;
+  ctx.font = `500 ${size}px JetBrains Mono, monospace`;
+  ctx.fillStyle = color; ctx.textBaseline = "middle"; ctx.fillText(text, 12, h / 2);
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.userData.aspect = w / h; sp.scale.set(w / h, 1, 1);
+  return sp;
+}
+function setLabelText(sp, text, color){
+  const fresh = label(text, color);
+  sp.material.map.dispose(); sp.material.map = fresh.material.map;
+  sp.userData.aspect = fresh.userData.aspect; sp.material.needsUpdate = true;
+}
+
+/* ---------------- Chart.js defaults ---------------- */
+Chart.defaults.color = C.dim;
+Chart.defaults.font.family = "JetBrains Mono, monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+Chart.defaults.animation = REDUCED ? false : { duration: 250 };
+const vline = {   // vertical cursor line at options.plugins.vline.x
+  id: "vline",
+  afterDatasetsDraw(chart, _a, opt){
+    if (opt.x == null) return;
+    const { ctx, chartArea: a, scales: { x } } = chart, px = x.getPixelForValue(opt.x);
+    if (px < a.left || px > a.right) return;
+    ctx.save(); ctx.strokeStyle = opt.color || C.accent; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke(); ctx.restore();
+  }
+};
+Chart.register(vline);
+
+/* =========================================================
+   Panel 1: the memory wall
+   ========================================================= */
+const G = DATA.ghz;
+const mem = { scene: makeScene(), n: 30, bpa: 8, side: 1, cam: { pos: null, target: new THREE.Vector3() } };
+const devices = [];
+function addDevice(name, gib, color, headroom){
+  const side = Math.cbrt(gib);
+  const geo = new THREE.BoxGeometry(side, side, side); geo.translate(side / 2, side / 2, side / 2);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+  const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.035, depthWrite: false }));
+  const tag = label(`${name} · ${gib.toFixed(0)} GiB`, color, 40);
+  tag.center.set(0, 0); tag.position.set(0, side, 0);
+  mem.scene.add(edges, fill, tag);
+  devices.push({ name, gib, side, headroom, tag, color });
+}
+if (G.gpu_mem_gib) addDevice("GPU " + G.gpu.name, G.gpu_mem_gib, C.gpu, G.headroom.gpu);
+if (G.cpu_ram_gib) addDevice("CPU node " + G.cpu.host, G.cpu_ram_gib, C.cpu, G.headroom.cpu);
+const grid = new THREE.GridHelper(400, 160, 0x23303f, 0x161c25); grid.position.set(0, -0.001, 0); mem.scene.add(grid);
+
+const stateMat = new THREE.MeshStandardMaterial({ color: C.teal, transparent: true, opacity: 0.55, roughness: 0.35, metalness: 0.1 });
+const stateCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5), stateMat);
+const stateEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5)),
+  new THREE.LineBasicMaterial({ color: C.teal }));
+const stateTag = label("state", C.teal, 40); stateTag.center.set(0, 1);
+mem.scene.add(stateCube, stateEdges, stateTag);
+
+const cpuPts = G.cpu.points, gpuPts = G.gpu.points;
+const cpuAt = n => cpuPts.find(p => p[0] === n), gpuAt = n => gpuPts.find(p => p[0] === n);
+const nMin = Math.min(cpuPts[0][0], gpuPts[0][0]);
+const nMax = Math.max(cpuPts[cpuPts.length - 1][0], gpuPts[gpuPts.length - 1][0], G.cpu_oom_n || 0);
+
+const memChart = new Chart($("memChart"), {
+  type: "line",
+  data: { datasets: [
+    { label: `CPU · ${G.cpu.name.replace(/\(R\)|CPU|@.*$/g, "").replace(/\s+/g, " ").trim()} (${G.cpu.precision})`,
+      data: cpuPts.map(p => ({ x: p[0], y: p[1] })), borderColor: C.cpu, backgroundColor: C.cpu, pointRadius: 3, tension: 0 },
+    { label: `GPU · ${G.gpu.name} (${G.gpu.precision})`,
+      data: gpuPts.map(p => ({ x: p[0], y: p[1] })), borderColor: C.gpu, backgroundColor: C.gpu, pointRadius: 3, tension: 0, pointStyle: "rect" },
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false, parsing: false,
+    scales: {
+      x: { type: "linear", min: nMin - 1, max: nMax + 1, title: { display: true, text: "qubits n" },
+           ticks: { stepSize: 1, callback: v => (Number.isInteger(v) && v % 2 === 0 ? v : "") } },
+      y: { type: "logarithmic", max: 10 ** Math.ceil(Math.log10(Math.max(...cpuPts.map(p => p[1]))) + 0.5), title: { display: true, text: "seconds" },
+           ticks: { callback: v => { const l = Math.log10(v); return Number.isInteger(l) ? "10" + String(l).replace(/-/g, "⁻").replace(/\d/g, d => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]) : ""; } } },
+    },
+    plugins: {
+      legend: { position: "top", align: "start", labels: { boxWidth: 10, boxHeight: 10 } },
+      tooltip: { callbacks: { label: c => `${c.dataset.label.split(" (")[0]}: ${fmtTime(c.parsed.y)} at n=${c.parsed.x}` } },
+      vline: { x: 30 },
+      oom: { n: G.cpu_oom_n },
+    },
+  },
+  plugins: [{
+    id: "oom",
+    afterDatasetsDraw(chart, _a, opt){
+      if (!opt.n) return;
+      const { ctx, chartArea: a, scales: { x } } = chart, px = x.getPixelForValue(opt.n);
+      ctx.save(); ctx.strokeStyle = C.coral; ctx.fillStyle = C.coral; ctx.lineWidth = 2;
+      const py = a.top + 18;
+      ctx.beginPath(); ctx.moveTo(px - 6, py - 6); ctx.lineTo(px + 6, py + 6); ctx.moveTo(px + 6, py - 6); ctx.lineTo(px - 6, py + 6); ctx.stroke();
+      ctx.font = "11px JetBrains Mono, monospace"; ctx.textAlign = "right";
+      ctx.fillText(`n = ${opt.n}: out of memory`, px - 12, py + 4); ctx.restore();
+    }
+  }],
+});
+
+function fitsText(dev, bytes){
+  const need = bytes * dev.headroom / Phys.GIB;
+  return need <= dev.gib;
+}
+function updateMemory(){
+  const n = mem.n, bpa = mem.bpa, bytes = Phys.stateBytes(n, bpa), gib = bytes / Phys.GIB;
+  $("nVal").textContent = n;
+  $("mAmps").textContent = fmtInt(2 ** n);
+  $("mFp32").textContent = fmtBytes(Phys.stateBytes(n, 8));
+  $("mFp64").textContent = fmtBytes(Phys.stateBytes(n, 16));
+  const c = cpuAt(n), g = gpuAt(n);
+  $("mCpu").innerHTML = c ? fmtTime(c[1]) : (n === G.cpu_oom_n ? '<span class="coral">out of memory</span>' : '<small>not measured</small>');
+  $("mGpu").innerHTML = g ? fmtTime(g[1]) : '<small>not measured</small>';
+  $("mSpeed").innerHTML = c && g ? Math.round(c[1] / g[1]).toLocaleString("en-US") + "×" : '<small>–</small>';
+  memChart.options.plugins.vline.x = n; memChart.update("none");
+
+  mem.side = Math.cbrt(gib);
+  stateCube.scale.setScalar(mem.side); stateEdges.scale.setScalar(mem.side);
+  const fitting = devices.filter(d => fitsText(d, bytes));
+  const col = fitting.length === devices.length ? C.teal : fitting.length ? C.accent : C.coral;
+  stateMat.color.set(col); stateEdges.material.color.set(col);
+  setLabelText(stateTag, `${n} qubits · ${fmtBytes(bytes)}`, col);
+
+  const fitNames = fitting.map(d => d.name.split(" ")[0]).join(" and ");
+  const where = fitting.length === devices.length ? "fits on both devices"
+              : fitting.length ? `fits only on the ${fitNames}` : "fits on neither device";
+  $("caption").innerHTML = `A ${n}-qubit state holds ${fmtInt(2 ** n)} amplitudes: ${fmtBytes(bytes)} in ${bpa === 8 ? "fp32" : "fp64"}, and it ${where}.`
+    + `<small>Cube volume ∝ memory. Each added qubit doubles it. The simulator also needs workspace: about ${G.headroom.cpu}× the state on the CPU (measured) and ${G.headroom.gpu}× on the GPU.</small>`;
+  fitCamera(mem, Math.max(mem.side, ...devices.map(d => d.side), 1));
+}
+const largestCpu = cpuPts[cpuPts.length - 1], largestCommon = gpuPts.filter(p => cpuAt(p[0])).pop();
+$("memNote").innerHTML = `<span class="badge measured">Measured</span>CUDA-Q ${'qpp-cpu'} on ${G.cpu.host} (${G.cpu.hardware.physical_cores || "?"} cores) up to n = ${largestCpu[0]}, cuStateVec on a ${G.gpu.name} up to n = ${gpuPts[gpuPts.length - 1][0]}. `
+  + (G.cpu_oom_n ? `At n = ${G.cpu_oom_n} the CPU run was stopped by the out-of-memory killer. ` : "")
+  + `At n = ${largestCommon[0]} the GPU was ${Math.round(cpuAt(largestCommon[0])[1] / largestCommon[1]).toLocaleString("en-US")}× faster. Each point is the median of ${G.repeats} runs of ${G.shots} shots.`;
+
+$("nSlider").addEventListener("input", e => { mem.n = +e.target.value; updateMemory(); });
+function setPrec(bpa){ mem.bpa = bpa; $("precFp32").setAttribute("aria-pressed", bpa === 8); $("precFp64").setAttribute("aria-pressed", bpa === 16); updateMemory(); }
+$("precFp32").onclick = () => setPrec(8); $("precFp64").onclick = () => setPrec(16);
+
+function fitCamera(st, size){
+  const d = Math.max(size, 0.6) * 2.4;
+  st.cam.goal = new THREE.Vector3(d * 1.05, d * 0.75, d * 1.25);
+  st.cam.goalTarget = new THREE.Vector3(size * 0.45, size * 0.38, size * 0.45);
+  if (!st.cam.pos){ st.cam.pos = st.cam.goal.clone(); st.cam.target.copy(st.cam.goalTarget); }
+  st.cam.fresh = true;
+}
+
+/* =========================================================
+   Panel 2: GHZ circuit, live
+   ========================================================= */
+const ghz = { scene: makeScene(), n: 6, state: null, gates: [], k: 0, timer: null, cam: { pos: null, target: new THREE.Vector3() } };
+let bars = null, barTargets = null, barHeights = null;
+const BAR_H = 4;
+const ghzChart = new Chart($("ghzChart"), {
+  type: "bar",
+  data: { labels: [], datasets: [{ data: [], backgroundColor: C.teal, borderRadius: 1, maxBarThickness: 46 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, title: { display: true, text: "counts" } }, x: { ticks: { autoSkip: false, maxRotation: 0 } } } },
+});
+function buildBars(){
+  if (bars){ ghz.scene.remove(bars); bars.geometry.dispose(); bars.material.dispose(); }
+  const dim = 1 << ghz.n, cols = 1 << Math.ceil(ghz.n / 2), rows = dim / cols, gap = 0.18;
+  const geo = new THREE.BoxGeometry(1 - gap, 1, 1 - gap); geo.translate(0, 0.5, 0);
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.05 });
+  bars = new THREE.InstancedMesh(geo, mat, dim);
+  bars.userData = { cols, rows };
+  barTargets = new Float64Array(dim); barHeights = new Float64Array(dim);
+  ghz.scene.add(bars);
+  for (let i = 0; i < dim; i++) bars.setColorAt(i, new THREE.Color(C.line));
+  const size = Math.max(cols, rows);
+  ghz.cam.goal = new THREE.Vector3(size * 0.9 + 2, size * 0.95 + 5, size * 1.35 + 4);
+  ghz.cam.goalTarget = new THREE.Vector3(0, -size * 0.12, 0);
+  if (!ghz.cam.pos || ghz.cam.n !== ghz.n){ ghz.cam.pos = ghz.cam.goal.clone(); ghz.cam.target.copy(ghz.cam.goalTarget); ghz.cam.fresh = true; }
+  ghz.cam.n = ghz.n;
+}
+const ghzFloor = new THREE.GridHelper(80, 80, 0x23303f, 0x161c25); ghz.scene.add(ghzFloor);
+const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color();
+function placeBars(){
+  const { cols, rows } = bars.userData;
+  for (let i = 0; i < barHeights.length; i++){
+    const x = (i % cols) - (cols - 1) / 2, z = Math.floor(i / cols) - (rows - 1) / 2;
+    tmpM.makeScale(1, Math.max(barHeights[i], 0.02), 1); tmpM.setPosition(x, 0, z);
+    bars.setMatrixAt(i, tmpM);
+    tmpC.set(barTargets[i] > 1e-12 ? C.teal : C.line); bars.setColorAt(i, tmpC);
+  }
+  bars.instanceMatrix.needsUpdate = true; if (bars.instanceColor) bars.instanceColor.needsUpdate = true;
+}
+function resetGhz(){
+  clearInterval(ghz.timer); ghz.timer = null;
+  ghz.state = Phys.zeroState(ghz.n); ghz.gates = Phys.ghzGates(ghz.n); ghz.k = 0;
+  buildBars(); refreshGhz(true);
+  ghzChart.data.labels = []; ghzChart.data.datasets[0].data = []; ghzChart.update("none");
+  $("histSub").textContent = "press Measure";
+}
+function refreshGhz(instant){
+  const p = Phys.probabilities(ghz.state), n = ghz.n;
+  for (let i = 0; i < p.length; i++){ barTargets[i] = p[i] * BAR_H; if (instant || REDUCED) barHeights[i] = barTargets[i]; }
+  placeBars();
+  $("gCount").textContent = `${ghz.k} / ${ghz.gates.length}`;
+  $("gWork").textContent = fmtInt(ghz.k * (1 << n));
+  const nz = []; p.forEach((v, i) => { if (v > 1e-12) nz.push(i); });
+  $("gNz").textContent = nz.length;
+  $("ampList").innerHTML = nz.slice(0, 4).map(i =>
+    `<b>|${Phys.bitstring(i, n)}⟩</b> amplitude ${ghz.state.re[i].toFixed(4)} · probability ${p[i].toFixed(3)}`).join("<br>")
+    + (nz.length > 4 ? `<br>… ${nz.length - 4} more` : "");
+  $("gateList").innerHTML = ghz.gates.map((g, i) =>
+    `<span class="gate ${i < ghz.k ? "done" : i === ghz.k ? "next" : ""}">${g.op === "H" ? "H q" + g.q : "CX q" + g.c + "→q" + g.t}</span>`).join("");
+  $("stepBtn").disabled = ghz.k >= ghz.gates.length;
+  $("runBtn").disabled = ghz.k >= ghz.gates.length;
+  const done = ghz.k === ghz.gates.length;
+  $("caption").innerHTML = done
+    ? `The ${n}-qubit GHZ state: only |${"0".repeat(n)}⟩ and |${"1".repeat(n)}⟩ survive, each with probability ½.<small>Bar height = probability of each of the ${fmtInt(1 << n)} basis states. Drag to rotate.</small>`
+    : `Building a ${n}-qubit GHZ state, one gate at a time.<small>Bar height = probability of each of the ${fmtInt(1 << n)} basis states. Each gate updates all of them.</small>`;
+}
+function stepGhz(){
+  if (ghz.k >= ghz.gates.length) return false;
+  Phys.applyGate(ghz.state, ghz.gates[ghz.k]); ghz.k++; refreshGhz(false); return true;
+}
+$("stepBtn").onclick = stepGhz;
+$("runBtn").onclick = () => {
+  clearInterval(ghz.timer);
+  if (REDUCED){ while (stepGhz()); return; }
+  ghz.timer = setInterval(() => { if (!stepGhz()){ clearInterval(ghz.timer); ghz.timer = null; } }, 420);
+};
+$("ghzReset").onclick = resetGhz;
+$("ghzN").addEventListener("input", e => { ghz.n = +e.target.value; $("ghzNVal").textContent = ghz.n; resetGhz(); });
+$("shots").addEventListener("input", e => { $("shotsVal").textContent = e.target.value; });
+$("sampleBtn").onclick = () => {
+  const shots = +$("shots").value, counts = Phys.sample(Phys.probabilities(ghz.state), shots);
+  const keys = [...counts.keys()].sort((a, b) => a - b).slice(0, 32);
+  ghzChart.data.labels = keys.map(i => Phys.bitstring(i, ghz.n));
+  ghzChart.data.datasets[0].data = keys.map(i => counts.get(i));
+  ghzChart.update();
+  $("histSub").textContent = `${fmtInt(shots)} shots, ${counts.size} distinct outcome${counts.size > 1 ? "s" : ""}`;
+};
+
+/* =========================================================
+   Panel 3: H2 VQE explorer
+   ========================================================= */
+const H2 = DATA.h2;
+const vqe = { scene: makeScene(), i: H2.R.indexOf(0.75) >= 0 ? H2.R.indexOf(0.75) : 0, theta: 0, anim: null,
+              cam: { pos: null, target: new THREE.Vector3() } };
+$("rSlider").max = H2.R.length - 1; $("rSlider").value = vqe.i;
+const SCALE = 2.2;   // scene units per Ångström
+const atomMat = new THREE.MeshStandardMaterial({ color: 0xe6ecf4, roughness: 0.25, metalness: 0.05, emissive: 0x111820 });
+const atomA = new THREE.Mesh(new THREE.SphereGeometry(0.62, 48, 32), atomMat);
+const atomB = atomA.clone();
+const glowMat = new THREE.MeshBasicMaterial({ color: C.teal, transparent: true, opacity: 0.18, depthWrite: false });
+const cloud = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), glowMat);
+const bondMat = new THREE.MeshStandardMaterial({ color: C.teal, transparent: true, opacity: 0.85, roughness: 0.3 });
+const bond = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 24), bondMat); bond.rotation.z = Math.PI / 2;
+const rTag = label("R", C.ink, 40);
+vqe.scene.add(atomA, atomB, cloud, bond, rTag);
+vqe.cam.goal = new THREE.Vector3(0, 2.6, 9.5); vqe.cam.goalTarget = new THREE.Vector3(0, 0, 0);
+vqe.cam.pos = vqe.cam.goal.clone(); vqe.cam.target.copy(vqe.cam.goalTarget);
+
+const thetas = Array.from({ length: 181 }, (_, k) => -Math.PI / 2 + k * Math.PI / 180);
+const landChart = new Chart($("landChart"), {
+  type: "line",
+  data: { datasets: [
+    { label: "E(θ)", data: [], borderColor: C.accent, pointRadius: 0, borderWidth: 2, tension: 0 },
+    { label: "Exact FCI", data: [], borderColor: C.ink, borderDash: [5, 4], pointRadius: 0, borderWidth: 1 },
+    { label: "you are here", data: [], borderColor: C.accent, backgroundColor: C.accent, pointRadius: 6, showLine: false },
+    { label: "optimizer path", data: [], borderColor: C.teal, backgroundColor: C.teal, pointRadius: 2.5, showLine: true, borderWidth: 1 },
+  ]},
+  options: { responsive: true, maintainAspectRatio: false, parsing: false,
+    scales: { x: { type: "linear", min: -Math.PI / 2, max: Math.PI / 2, title: { display: true, text: "θ [rad]" } },
+              y: { title: { display: true, text: "Ha" } } },
+    plugins: { legend: { labels: { boxWidth: 10, boxHeight: 2, filter: it => it.text !== "you are here" } } } },
+});
+const pesChart = new Chart($("pesChart"), {
+  type: "line",
+  data: { datasets: [
+    { label: "Exact FCI (PySCF)", data: H2.R.map((r, k) => ({ x: r, y: H2.E_fci[k] })), borderColor: C.ink, pointRadius: 0, borderWidth: 1.5 },
+    { label: "Hartree-Fock", data: H2.R.map((r, k) => ({ x: r, y: H2.E_hf[k] })), borderColor: C.coral, borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5 },
+    { label: "VQE (CUDA-Q, measured)", data: H2.R.map((r, k) => ({ x: r, y: H2.E_vqe[k] })), borderColor: C.gpu, backgroundColor: "transparent",
+      pointRadius: 3.2, pointBorderWidth: 1.5, showLine: false },
+  ]},
+  options: { responsive: true, maintainAspectRatio: false, parsing: false,
+    scales: { x: { type: "linear", min: 0.25, max: 2.55, title: { display: true, text: "R [Å]" } }, y: { title: { display: true, text: "Ha" } } },
+    plugins: { legend: { labels: { boxWidth: 10, boxHeight: 2 } }, vline: { x: H2.R[vqe.i] } } },
+});
+
+function termsHtml(terms){
+  return terms.map(([w, c]) => `<span><b>${w}</b> ${c >= 0 ? "+" : "−"}${Math.abs(c).toFixed(5)}</span>`).join("");
+}
+function updateVqe(rebuildLandscape){
+  const i = vqe.i, r = H2.R[i], terms = H2.terms[i], blk = H2.block[i];
+  const e = Phys.vqeEnergy(terms, vqe.theta, H2.n_qubits, H2.hf_index, H2.double_index);
+  const fci = H2.E_fci[i], hf = H2.E_hf[i], opt = Phys.vqeOptimum(blk);
+  const errMha = Math.abs(e - fci) * 1e3;
+  $("rVal").textContent = r.toFixed(2) + " Å";
+  $("thVal").textContent = vqe.theta.toFixed(3) + " rad";
+  $("vE").innerHTML = fmtE(e); $("vFci").innerHTML = fmtE(fci); $("vHf").innerHTML = fmtE(hf);
+  $("vErr").innerHTML = `<span class="${errMha < 1.6 ? "teal" : "coral"}">${fmtMilli(errMha)}</span> <small>mHa</small>`;
+  const corr = (hf - e) / (hf - fci);
+  $("vCorr").innerHTML = !isFinite(corr) ? "–" : corr < 0 ? '<span class="coral">above HF</span>' : (corr * 100).toFixed(1) + " %";
+  $("vTh").textContent = opt.theta.toFixed(4) + " rad";
+  if (rebuildLandscape){
+    landChart.data.datasets[0].data = thetas.map(t => ({ x: t, y: Phys.vqeEnergy(terms, t, H2.n_qubits, H2.hf_index, H2.double_index) }));
+    landChart.data.datasets[1].data = [{ x: -Math.PI / 2, y: fci }, { x: Math.PI / 2, y: fci }];
+    $("termGrid").innerHTML = termsHtml(terms);
+    pesChart.options.plugins.vline.x = r; pesChart.update("none");
+  }
+  landChart.data.datasets[2].data = [{ x: vqe.theta, y: e }];
+  landChart.update("none");
+
+  // scene: atoms at ±R/2, electron cloud stronger when the bond is well described
+  const half = r * SCALE / 2;
+  atomA.position.set(-half, 0, 0); atomB.position.set(half, 0, 0);
+  bond.scale.set(1, Math.max(r * SCALE - 1.1, 0.01), 1);
+  const bound = (H2.E_dissociation - fci) / (H2.E_dissociation - Math.min(...H2.E_fci));
+  bondMat.opacity = 0.15 + 0.75 * Math.max(0, Math.min(1, bound));
+  cloud.scale.set(half + 1.0, 0.95, 0.95); glowMat.opacity = 0.05 + 0.16 * Math.max(0, Math.min(1, bound));
+  rTag.position.set(0, 1.45, 0); setLabelText(rTag, `R = ${r.toFixed(2)} Å`, C.ink);
+  const z = Math.max(9.5, r * SCALE * 1.55 + 4);
+  vqe.cam.goal = new THREE.Vector3(0, 2.6 * z / 9.5, z); vqe.cam.goalTarget = new THREE.Vector3(0, -0.3, 0);
+  if (active === "vqe") vqe.cam.fresh = true;
+  $("caption").innerHTML = `H₂ at R = ${r.toFixed(2)} Å. Move θ to mix in the doubly excited state; the energy is exact at the bottom of the curve.`
+    + `<small>Hartree-Fock (θ = 0) misses ${((hf - fci) * 1e3).toFixed(1)} mHa here${r > 1.5 ? ", and the gap keeps growing as the bond breaks" : ""}. Chemical accuracy is 1.6 mHa.</small>`;
+}
+$("rSlider").addEventListener("input", e => { stopOpt(); vqe.i = +e.target.value; landChart.data.datasets[3].data = []; updateVqe(true); });
+$("thSlider").addEventListener("input", e => { stopOpt(); vqe.theta = +e.target.value; updateVqe(false); });
+$("hfBtn").onclick = () => { stopOpt(); vqe.theta = 0; $("thSlider").value = 0; landChart.data.datasets[3].data = []; updateVqe(false); };
+function stopOpt(){ if (vqe.anim){ clearInterval(vqe.anim); vqe.anim = null; } }
+$("optBtn").onclick = () => {
+  // Illustrative gradient descent on θ. The measured run used SciPy over all 3 UCCSD parameters.
+  stopOpt();
+  const terms = H2.terms[vqe.i], E = t => Phys.vqeEnergy(terms, t, H2.n_qubits, H2.hf_index, H2.double_index);
+  const [a, b, c] = H2.block[vqe.i], eta = 0.6 / (4 * Math.hypot((a - b) / 2, c));  // step scaled by the curvature at the minimum
+  const path = [{ x: vqe.theta, y: E(vqe.theta) }]; landChart.data.datasets[3].data = path;
+  let steps = 0;
+  const tick = () => {               // returns true when converged
+    const h = 1e-4, g = (E(vqe.theta + h) - E(vqe.theta - h)) / (2 * h);
+    vqe.theta = Math.max(-1.5708, Math.min(1.5708, vqe.theta - eta * g));
+    path.push({ x: vqe.theta, y: E(vqe.theta) }); $("thSlider").value = vqe.theta; updateVqe(false);
+    return Math.abs(g) < 1e-7 || ++steps >= 200;
+  };
+  if (REDUCED){ while (!tick()); return; }
+  vqe.anim = setInterval(() => { if (tick()) stopOpt(); }, 70);
+};
+
+/* =========================================================
+   Tabs, resize, render loop
+   ========================================================= */
+const scenes = { memory: mem, ghz, vqe };
+let active = "memory";
+function activate(tab){
+  if (!scenes[tab]) tab = "memory";
+  active = tab;
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + tab));
+  document.querySelectorAll(".hud").forEach(h => h.classList.toggle("active", h.dataset.for === tab));
+  const st = scenes[tab];
+  if (st.cam.pos){ camera.position.copy(st.cam.pos); controls.target.copy(st.cam.target); st.cam.fresh = true; }
+  if (tab === "memory") updateMemory();
+  if (tab === "ghz") refreshGhz(true);
+  if (tab === "vqe") updateVqe(true);
+  [memChart, ghzChart, landChart, pesChart].forEach(c => c.resize());
+  if (location.hash !== "#" + tab) history.replaceState(null, "", "#" + tab);
+}
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => activate(b.dataset.tab)));
+document.querySelector("nav").addEventListener("keydown", e => {
+  const tabs = [...document.querySelectorAll("nav button")], i = tabs.findIndex(t => t.dataset.tab === active);
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft"){
+    const j = (i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length; activate(tabs[j].dataset.tab); tabs[j].focus();
+  }
+});
+window.addEventListener("hashchange", () => activate(location.hash.slice(1)));
+
+function resize(){
+  const w = host.clientWidth, h = host.clientHeight;
+  renderer.setSize(w, h, false); renderer.domElement.style.width = w + "px"; renderer.domElement.style.height = h + "px";
+  camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+controls.addEventListener("start", () => { scenes[active].cam.fresh = false; });
+
+function frame(){
+  const st = scenes[active];
+  if (st.cam.fresh && st.cam.goal){           // glide to the framing chosen by the panel until the user takes over
+    const k = REDUCED ? 1 : 0.08;
+    camera.position.lerp(st.cam.goal, k); controls.target.lerp(st.cam.goalTarget, k);
+    if (camera.position.distanceTo(st.cam.goal) < 1e-3 * st.cam.goal.length()) st.cam.fresh = false;
+  }
+  controls.update();
+  st.cam.pos = camera.position.clone(); st.cam.target.copy(controls.target);
+  if (active === "ghz" && bars){
+    let moving = false;
+    for (let i = 0; i < barHeights.length; i++){
+      const d = barTargets[i] - barHeights[i];
+      if (Math.abs(d) > 1e-4){ barHeights[i] += d * 0.18; moving = true; } else barHeights[i] = barTargets[i];
+    }
+    if (moving) placeBars();
+  }
+  if (active === "memory"){
+    // keep the state label above the state cube and the device labels readable at any zoom
+    const s = mem.side, dist = camera.position.distanceTo(controls.target), k = dist * 0.022;
+    stateTag.position.set(s, 0, s);
+    stateTag.scale.set(stateTag.userData.aspect * k, k, 1);
+    devices.forEach(d => { d.tag.scale.set(d.tag.userData.aspect * k * 0.85, k * 0.85, 1); d.tag.position.set(0, d.side + k * 0.2, 0); });
+  }
+  if (active === "vqe"){ rTag.scale.set(rTag.userData.aspect * 0.42, 0.42, 1); }
+  renderer.render(st.scene, camera);
+  requestAnimationFrame(frame);
+}
+
+resetGhz();
+resize();
+activate(location.hash.slice(1) || "memory");
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
