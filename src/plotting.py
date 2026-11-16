@@ -150,7 +150,7 @@ def plot_ghz_speedup(rows: list[dict], out_path: Path) -> Optional[Path]:
         ax.set_ylabel("Speedup (CPU time / GPU time)")
         ax.set_title("GPU speedup on GHZ circuits")
         ax.xaxis.get_major_locator().set_params(integer=True)
-        ax.legend(fontsize=9, loc="upper left")
+        ax.legend(fontsize=9, loc="center right")
         fig.savefig(out_path)
         plt.close(fig)
     return out_path

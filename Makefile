@@ -6,7 +6,8 @@
 #   make ghz            GHZ benchmark on this machine -> results/ghz_benchmark_$(GHZ_TAG).csv
 #   make vqe            full H2 VQE sweep             -> results/h2_*.csv/json/png
 #   make plots          merge all GHZ CSVs and regenerate every plot
-#   make all            install, test, both experiments and all plots
+#   make readme         regenerate README.md from the result files
+#   make all            install, test, both experiments, all plots and the README
 #
 # Every machine writes its own GHZ file (ghz_benchmark_<tag>.csv); `make plots`
 # merges them into results/ghz_benchmark.csv, so a CPU run on a cluster node and
@@ -22,10 +23,10 @@ GHZ_TAG     ?= local
 GHZ_ARGS    ?=
 VQE_ARGS    ?=
 
-.PHONY: help install test quick ghz ghz-quick vqe vqe-quick plots all clean
+.PHONY: help install test quick ghz ghz-quick vqe vqe-quick plots readme all clean
 
 help:
-	@sed -n '3,10p' Makefile | sed 's/^# \{0,1\}//'
+	@sed -n '3,11p' Makefile | sed 's/^# \{0,1\}//'
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -53,7 +54,10 @@ plots:
 	$(PYTHON) -m src.plotting ghz --merge-to $(RESULTS)/ghz_benchmark.csv --outdir $(RESULTS)
 	$(PYTHON) -m src.plotting vqe --outdir $(RESULTS)
 
-all: install test ghz vqe plots
+readme:
+	$(PYTHON) scripts/build_readme.py
+
+all: install test ghz vqe plots readme
 
 clean:
 	rm -rf $(RESULTS)/quick .pytest_cache src/__pycache__ tests/__pycache__

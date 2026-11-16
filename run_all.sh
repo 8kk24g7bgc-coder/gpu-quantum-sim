@@ -56,3 +56,6 @@ step "H2 VQE sweep -> $RESULTS/"
 step "Merging GHZ results and regenerating plots"
 "$PYTHON" -m src.plotting ghz --merge-to "$RESULTS/ghz_benchmark.csv" --outdir "$RESULTS"
 "$PYTHON" -m src.plotting vqe --outdir "$RESULTS"
+
+step "Regenerating README.md from the results"
+"$PYTHON" scripts/build_readme.py
